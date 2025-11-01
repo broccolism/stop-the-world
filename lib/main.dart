@@ -25,39 +25,10 @@ void showMacAccessibilityDialog() {
   Process.run('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility']);
 }
 
-void main(List<String> args) async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await _checkAccessibilityPermission();
   await windowManager.ensureInitialized();
-
-  if (args.contains('--popup')) {
-    debugPrint('[Popup] Initializing popup window...');
-    
-    WindowOptions popupOptions = const WindowOptions(
-      size: Size(300, 100),
-      titleBarStyle: TitleBarStyle.hidden,
-      skipTaskbar: true,
-      alwaysOnTop: true,
-    );
-
-    windowManager.waitUntilReadyToShow(popupOptions, () async {
-      debugPrint('[Popup] Window ready, configuring...');
-      await windowManager.setPosition(const Offset(1, 1));
-      await windowManager.show();
-      debugPrint('[Popup] Window shown.');
-      
-      // 2초 후 창 닫기
-      Future.delayed(const Duration(seconds: 2), () async {
-        debugPrint('[Popup] Closing window...');
-        await windowManager.close();
-        debugPrint('[Popup] Closed successfully.');
-        exit(0);
-      });
-    });
-
-    runApp(const PopupApp());
-    return;
-  }
 
   // 메인 앱용 옵션
   WindowOptions windowOptions = const WindowOptions(
@@ -105,6 +76,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
   Timer? _popupTimer;
+  bool _isPopupShowing = false;
 
   void _incrementCounter() {
     setState(() {
@@ -120,29 +92,88 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  // 7초마다 서브 프로세스를 실행
+  // 7초마다 팝업 표시
   void _startReminderLoop() {
     Timer.periodic(const Duration(seconds: 7), (timer) async {
-      final executablePath = Platform.resolvedExecutable;
-
-      debugPrint('[Popup] Trying to launch executable at: $executablePath');
-
-      final file = File(executablePath);
-      if (!file.existsSync()) {
-        debugPrint('[Popup] Executable does not exist at path: $executablePath');
+      if (_isPopupShowing) {
+        debugPrint('[Main] Popup already showing, skipping...');
         return;
       }
-
-      try {
-        final result = await Process.run(executablePath, ['--popup']);
-        debugPrint('Popup launched: ${result.stdout}');
-        if (result.stderr != null && result.stderr.toString().isNotEmpty) {
-          debugPrint('Popup stderr: ${result.stderr}');
-        }
-      } catch (e, st) {
-        debugPrint('Failed to launch popup: $e\n$st');
-      }
+      
+      debugPrint('[Main] Showing popup...');
+      await _showPopup();
     });
+  }
+
+  // 팝업을 표시하는 함수
+  Future<void> _showPopup() async {
+    if (!mounted) return;
+    
+    _isPopupShowing = true;
+    
+    // 현재 창 상태 저장
+    final currentSize = await windowManager.getSize();
+    final currentPosition = await windowManager.getPosition();
+    
+    // 팝업 오버레이 표시
+    final overlay = Overlay.of(context);
+    late OverlayEntry overlayEntry;
+    
+    overlayEntry = OverlayEntry(
+      builder: (context) => Positioned.fill(
+        child: Container(
+          color: Colors.black87,
+          child: const Center(
+            child: Text(
+              '🔔 Time to blink!',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    
+    try {
+      // 최소화되어 있을 수 있으므로 복원
+      await windowManager.restore();
+      
+      // 오버레이 표시
+      overlay.insert(overlayEntry);
+      
+      // 팝업 모드로 전환
+      await windowManager.setSize(const Size(300, 100));
+      await windowManager.setPosition(const Offset(100, 100));
+      await windowManager.setAlwaysOnTop(true);
+      await windowManager.show();
+      await windowManager.focus();
+      
+      debugPrint('[Popup] Window transformed to popup mode');
+      
+      // 2초 대기
+      await Future.delayed(const Duration(seconds: 2));
+      
+      // 오버레이 제거
+      overlayEntry.remove();
+      
+      // 원래 상태로 복원
+      await windowManager.setSize(currentSize);
+      await windowManager.setPosition(currentPosition);
+      await windowManager.setAlwaysOnTop(false);
+      
+      // 창 최소화
+      await windowManager.minimize();
+      
+      debugPrint('[Popup] Window minimized');
+    } catch (e) {
+      debugPrint('[Popup] Error: $e');
+      overlayEntry.remove();
+    } finally {
+      _isPopupShowing = false;
+    }
   }
 
   @override
@@ -174,27 +205,6 @@ class _MyHomePageState extends State<MyHomePage> {
         onPressed: _incrementCounter,
         tooltip: 'Increment',
         child: const Icon(Icons.add),
-      ),
-    );
-  }
-}
-
-// 팝업 앱
-class PopupApp extends StatelessWidget {
-  const PopupApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: Colors.black87,
-        body: Center(
-          child: Text(
-            '🔔 Time to blink!',
-            style: TextStyle(color: Colors.white, fontSize: 18),
-          ),
-        ),
       ),
     );
   }
