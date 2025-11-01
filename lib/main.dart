@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as path;
 import 'package:window_manager/window_manager.dart';
 
 Future<void> _checkAccessibilityPermission() async {
@@ -122,15 +121,18 @@ class _MyHomePageState extends State<MyHomePage> {
   // 7초마다 서브 프로세스를 실행
   void _startReminderLoop() {
     Timer.periodic(const Duration(seconds: 7), (timer) async {
-      final execPath = path.join(
-        _getAppBundlePath(),
-        'stop_the_world.app',
-        'Contents',
-        'MacOS',
-        'stop_the_world',
-      );
+      final executablePath = Platform.resolvedExecutable;
+
+      debugPrint('[Popup] Trying to launch executable at: $executablePath');
+
+      final file = File(executablePath);
+      if (!file.existsSync()) {
+        debugPrint('[Popup] Executable does not exist at path: $executablePath');
+        return;
+      }
+
       try {
-        final result = await Process.run(execPath, ['--popup']);
+        final result = await Process.run(executablePath, ['--popup']);
         debugPrint('Popup launched: ${result.stdout}');
         if (result.stderr != null && result.stderr.toString().isNotEmpty) {
           debugPrint('Popup stderr: ${result.stderr}');
@@ -140,21 +142,6 @@ class _MyHomePageState extends State<MyHomePage> {
       }
     });
   }
-
-String _getExecutablePath() {
-  final currentAppPath = Platform.executable; // Full path to current executable
-  final execFile = File(currentAppPath);
-  return path.joinAll([
-    execFile.parent.path,
-    'stop_the_world',
-  ]);
-}
-
-String _getAppBundlePath() {
-  final currentAppPath = Platform.resolvedExecutable;
-  final appBundle = File(currentAppPath).parent.parent.parent.parent;
-  return appBundle.path;
-}
 
   @override
   void dispose() {
