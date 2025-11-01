@@ -1,12 +1,38 @@
+import 'dart:io'; // 추가
+import 'dart:math'; // 팝업 위치 랜덤
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
-import 'dart:async'; // 상단 import에 추가
+import 'dart:async';
+import 'package:path/path.dart' as path;
 
-void main() async {
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await windowManager.ensureInitialized();
 
+  if (args.contains('--popup')) {
+    await windowManager.setAsFrameless();
+    await windowManager.setSize(const Size(300, 100));
+    await windowManager.setAlwaysOnTop(true);
+    await windowManager.setSkipTaskbar(true);
+
+    final bounds = await windowManager.getBounds();
+    final screenWidth = bounds.width;
+    final screenHeight = bounds.height;
+    final rand = Random();
+    final x = rand.nextInt((screenWidth - 300).toInt()).toDouble();
+    final y = rand.nextInt((screenHeight - 100).toInt()).toDouble();
+
+    await windowManager.setPosition(Offset(x, y));
+    await windowManager.show();
+
+    runApp(const PopupApp());
+
+    await Future.delayed(const Duration(seconds: 2));
+    await windowManager.close();
+    return;
+  }
+
+  // 메인 앱용 옵션
   WindowOptions windowOptions = const WindowOptions(
     size: Size(400, 300),
     center: true,
@@ -16,7 +42,7 @@ void main() async {
   );
 
   windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.setAlwaysOnTop(true);  // 🔥 여기서 항상 위에 있도록 설정
+    await windowManager.setAlwaysOnTop(false);
     await windowManager.show();
     await windowManager.focus();
   });
@@ -67,37 +93,24 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  // 7초마다 서브 프로세스를 실행
   void _startReminderLoop() {
-    Timer.periodic(const Duration(seconds: 5), (timer) {
-      _showTemporaryPopup(context);
+    Timer.periodic(const Duration(seconds: 7), (timer) {
+      Process.start(
+        _getExecutablePath(),
+        ['--popup'],
+      );
     });
   }
 
-  void _showTemporaryPopup(BuildContext context) {
-    final overlay = Overlay.of(context);
-    if (overlay == null) return;
-
-    final entry = OverlayEntry(
-      builder: (context) => Positioned(
-        top: 100,
-        left: 100,
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            color: Colors.black.withOpacity(0.8),
-            child: const Text(
-              'Time to blink 👀',
-              style: TextStyle(color: Colors.white, fontSize: 18),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    overlay.insert(entry);
-    Future.delayed(const Duration(seconds: 2), () => entry.remove());
-  }
+String _getExecutablePath() {
+  final currentAppPath = Platform.executable; // Full path to current executable
+  final execFile = File(currentAppPath);
+  return path.joinAll([
+    execFile.parent.path,
+    'stop_the_world',
+  ]);
+}
 
   @override
   void dispose() {
@@ -112,26 +125,43 @@ class _MyHomePageState extends State<MyHomePage> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
       ),
-      body: Stack(
-        children: [
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                const Text('You have pushed the button this many times:'),
-                Text(
-                  '$_counter',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-              ],
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            const Text('You have pushed the button this many times:'),
+            Text(
+              '$_counter',
+              style: Theme.of(context).textTheme.headlineMedium,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _incrementCounter,
         tooltip: 'Increment',
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+// 팝업 앱
+class PopupApp extends StatelessWidget {
+  const PopupApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: Colors.black87,
+        body: Center(
+          child: Text(
+            '🔔 Time to blink!',
+            style: TextStyle(color: Colors.white, fontSize: 18),
+          ),
+        ),
       ),
     );
   }
