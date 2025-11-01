@@ -32,28 +32,30 @@ void main(List<String> args) async {
 
   if (args.contains('--popup')) {
     debugPrint('[Popup] Initializing popup window...');
-    await windowManager.setAsFrameless();
-    await windowManager.setSize(const Size(300, 100));
-    await windowManager.setAlwaysOnTop(true);
-    await windowManager.setSkipTaskbar(true);
+    
+    WindowOptions popupOptions = const WindowOptions(
+      size: Size(300, 100),
+      titleBarStyle: TitleBarStyle.hidden,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+    );
 
-    final x = 1.0;
-    final y = 1.0;
-
-    await windowManager.setPosition(Offset(x, y));
-    await windowManager.show();
-    debugPrint('[Popup] Window shown. Running app...');
+    windowManager.waitUntilReadyToShow(popupOptions, () async {
+      debugPrint('[Popup] Window ready, configuring...');
+      await windowManager.setPosition(const Offset(1, 1));
+      await windowManager.show();
+      debugPrint('[Popup] Window shown.');
+      
+      // 2초 후 창 닫기
+      Future.delayed(const Duration(seconds: 2), () async {
+        debugPrint('[Popup] Closing window...');
+        await windowManager.close();
+        debugPrint('[Popup] Closed successfully.');
+        exit(0);
+      });
+    });
 
     runApp(const PopupApp());
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      debugPrint('[Popup] UI rendered, waiting 2 seconds before closing...');
-      await Future.delayed(const Duration(seconds: 2));
-      debugPrint('[Popup] Closing window...');
-      await windowManager.close();
-      debugPrint('[Popup] Closed successfully.');
-      exit(0);
-    });
     return;
   }
 
