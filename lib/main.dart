@@ -1,34 +1,60 @@
-import 'dart:io'; // 추가
-import 'dart:math'; // 팝업 위치 랜덤
-import 'package:flutter/material.dart';
-import 'package:window_manager/window_manager.dart';
 import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
+import 'package:window_manager/window_manager.dart';
+
+Future<void> _checkAccessibilityPermission() async {
+  if (Platform.isMacOS) {
+    final result = await Process.run(
+      'osascript',
+      ['-e', 'tell application "System Events" to get UI elements enabled'],
+    );
+
+    if ((result.stdout as String).trim() != 'true') {
+      debugPrint('[Permission] Accessibility access not enabled.');
+      showMacAccessibilityDialog();
+    } else {
+      debugPrint('[Permission] Accessibility access granted.');
+    }
+  }
+}
+
+void showMacAccessibilityDialog() {
+  debugPrint('[Permission] Prompting user to open Accessibility settings...');
+  Process.run('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility']);
+}
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await _checkAccessibilityPermission();
   await windowManager.ensureInitialized();
 
   if (args.contains('--popup')) {
+    debugPrint('[Popup] Initializing popup window...');
     await windowManager.setAsFrameless();
     await windowManager.setSize(const Size(300, 100));
     await windowManager.setAlwaysOnTop(true);
     await windowManager.setSkipTaskbar(true);
 
-    final bounds = await windowManager.getBounds();
-    final screenWidth = bounds.width;
-    final screenHeight = bounds.height;
-    final rand = Random();
-    final x = rand.nextInt((screenWidth - 300).toInt()).toDouble();
-    final y = rand.nextInt((screenHeight - 100).toInt()).toDouble();
+    final x = 1.0;
+    final y = 1.0;
 
     await windowManager.setPosition(Offset(x, y));
     await windowManager.show();
+    debugPrint('[Popup] Window shown. Running app...');
 
     runApp(const PopupApp());
 
-    await Future.delayed(const Duration(seconds: 2));
-    await windowManager.close();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      debugPrint('[Popup] UI rendered, waiting 2 seconds before closing...');
+      await Future.delayed(const Duration(seconds: 2));
+      debugPrint('[Popup] Closing window...');
+      await windowManager.close();
+      debugPrint('[Popup] Closed successfully.');
+      exit(0);
+    });
     return;
   }
 
@@ -95,11 +121,23 @@ class _MyHomePageState extends State<MyHomePage> {
 
   // 7초마다 서브 프로세스를 실행
   void _startReminderLoop() {
-    Timer.periodic(const Duration(seconds: 7), (timer) {
-      Process.start(
-        _getExecutablePath(),
-        ['--popup'],
+    Timer.periodic(const Duration(seconds: 7), (timer) async {
+      final execPath = path.join(
+        _getAppBundlePath(),
+        'stop_the_world.app',
+        'Contents',
+        'MacOS',
+        'stop_the_world',
       );
+      try {
+        final result = await Process.run(execPath, ['--popup']);
+        debugPrint('Popup launched: ${result.stdout}');
+        if (result.stderr != null && result.stderr.toString().isNotEmpty) {
+          debugPrint('Popup stderr: ${result.stderr}');
+        }
+      } catch (e, st) {
+        debugPrint('Failed to launch popup: $e\n$st');
+      }
     });
   }
 
@@ -110,6 +148,12 @@ String _getExecutablePath() {
     execFile.parent.path,
     'stop_the_world',
   ]);
+}
+
+String _getAppBundlePath() {
+  final currentAppPath = Platform.resolvedExecutable;
+  final appBundle = File(currentAppPath).parent.parent.parent.parent;
+  return appBundle.path;
 }
 
   @override
