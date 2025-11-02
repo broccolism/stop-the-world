@@ -1,33 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
-Future<void> _checkAccessibilityPermission() async {
-  if (Platform.isMacOS) {
-    final result = await Process.run(
-      'osascript',
-      ['-e', 'tell application "System Events" to get UI elements enabled'],
-    );
-
-    if ((result.stdout as String).trim() != 'true') {
-      debugPrint('[Permission] Accessibility access not enabled.');
-      showMacAccessibilityDialog();
-    } else {
-      debugPrint('[Permission] Accessibility access granted.');
-    }
-  }
-}
-
-void showMacAccessibilityDialog() {
-  debugPrint('[Permission] Prompting user to open Accessibility settings...');
-  Process.run('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility']);
-}
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await _checkAccessibilityPermission();
   await windowManager.ensureInitialized();
 
   // 메인 앱용 옵션
@@ -92,85 +69,46 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  // 7초마다 팝업 표시
+  // 7초마다 창을 최상단에 표시, 2초 후 최소화
   void _startReminderLoop() {
     Timer.periodic(const Duration(seconds: 7), (timer) async {
       if (_isPopupShowing) {
-        debugPrint('[Main] Popup already showing, skipping...');
+        debugPrint('[Reminder] Already showing, skipping...');
         return;
       }
       
-      debugPrint('[Main] Showing popup...');
-      await _showPopup();
+      debugPrint('[Reminder] Showing window...');
+      await _showReminder();
     });
   }
 
-  // 팝업을 표시하는 함수
-  Future<void> _showPopup() async {
+  // 알림 창을 표시하는 함수
+  Future<void> _showReminder() async {
     if (!mounted) return;
     
     _isPopupShowing = true;
     
-    // 현재 창 상태 저장
-    final currentSize = await windowManager.getSize();
-    final currentPosition = await windowManager.getPosition();
-    
-    // 팝업 오버레이 표시
-    final overlay = Overlay.of(context);
-    late OverlayEntry overlayEntry;
-    
-    overlayEntry = OverlayEntry(
-      builder: (context) => Positioned.fill(
-        child: Container(
-          color: Colors.black87,
-          child: const Center(
-            child: Text(
-              '🔔 Time to blink!',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    
     try {
-      // 최소화되어 있을 수 있으므로 복원
+      // 최소화되어 있으면 복원
       await windowManager.restore();
       
-      // 오버레이 표시
-      overlay.insert(overlayEntry);
-      
-      // 팝업 모드로 전환
-      await windowManager.setSize(const Size(300, 100));
-      await windowManager.setPosition(const Offset(100, 100));
+      // 최상단으로 올리고 포커스 주기
       await windowManager.setAlwaysOnTop(true);
       await windowManager.show();
       await windowManager.focus();
       
-      debugPrint('[Popup] Window transformed to popup mode');
+      debugPrint('[Reminder] Window shown on top');
       
       // 2초 대기
       await Future.delayed(const Duration(seconds: 2));
       
-      // 오버레이 제거
-      overlayEntry.remove();
-      
-      // 원래 상태로 복원
-      await windowManager.setSize(currentSize);
-      await windowManager.setPosition(currentPosition);
+      // 최상단 해제 후 최소화
       await windowManager.setAlwaysOnTop(false);
-      
-      // 창 최소화
       await windowManager.minimize();
       
-      debugPrint('[Popup] Window minimized');
+      debugPrint('[Reminder] Window minimized');
     } catch (e) {
-      debugPrint('[Popup] Error: $e');
-      overlayEntry.remove();
+      debugPrint('[Reminder] Error: $e');
     } finally {
       _isPopupShowing = false;
     }
@@ -188,6 +126,17 @@ class _MyHomePageState extends State<MyHomePage> {
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: 'Exit App',
+            onPressed: () async {
+              debugPrint('[App] Exiting...');
+              _popupTimer?.cancel();
+              await windowManager.destroy();
+            },
+          ),
+        ],
       ),
       body: Center(
         child: Column(
@@ -197,6 +146,21 @@ class _MyHomePageState extends State<MyHomePage> {
             Text(
               '$_counter',
               style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 40),
+            ElevatedButton.icon(
+              onPressed: () async {
+                debugPrint('[App] Exiting...');
+                _popupTimer?.cancel();
+                await windowManager.destroy();
+              },
+              icon: const Icon(Icons.exit_to_app),
+              label: const Text('Exit App'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
             ),
           ],
         ),
