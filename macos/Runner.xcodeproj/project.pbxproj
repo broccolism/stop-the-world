@@ -28,6 +28,10 @@
 		33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F42044A3C60003C045 /* MainMenu.xib */; };
 		33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC11122044BFA00003C045 /* MainFlutterWindow.swift */; };
 		6073AA5FA98F51D659607B46 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 97421F645CDCEE8C50C16550 /* Pods_Runner.framework */; };
+		AA1234567890ABCD00000001 /* PoseDetectionPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1234567890ABCD00000011 /* PoseDetectionPlugin.swift */; };
+		AA1234567890ABCD00000002 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1234567890ABCD00000012 /* CameraManager.swift */; };
+		AA1234567890ABCD00000003 /* PoseDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1234567890ABCD00000013 /* PoseDetector.swift */; };
+		AA1234567890ABCD00000004 /* VideoTexture.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1234567890ABCD00000014 /* VideoTexture.swift */; };
 		BFF07508EDF595A7CE50A54A /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B0319685F4F20BB50ADBAD86 /* Pods_RunnerTests.framework */; };
 /* End PBXBuildFile section */
 
@@ -86,6 +90,10 @@
 		9220FF1D21A30C13E013BA32 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		97421F645CDCEE8C50C16550 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA1234567890ABCD00000011 /* PoseDetectionPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseDetectionPlugin.swift; sourceTree = "<group>"; };
+		AA1234567890ABCD00000012 /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
+		AA1234567890ABCD00000013 /* PoseDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseDetector.swift; sourceTree = "<group>"; };
+		AA1234567890ABCD00000014 /* VideoTexture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTexture.swift; sourceTree = "<group>"; };
 		B0319685F4F20BB50ADBAD86 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		CAC7301E7C959C2B9A9A06A8 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -177,6 +185,10 @@
 			children = (
 				33CC10F02044A3C60003C045 /* AppDelegate.swift */,
 				33CC11122044BFA00003C045 /* MainFlutterWindow.swift */,
+				AA1234567890ABCD00000011 /* PoseDetectionPlugin.swift */,
+				AA1234567890ABCD00000012 /* CameraManager.swift */,
+				AA1234567890ABCD00000013 /* PoseDetector.swift */,
+				AA1234567890ABCD00000014 /* VideoTexture.swift */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
 				33CC11242044D66E0003C045 /* Resources */,
@@ -440,6 +452,10 @@
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
+				AA1234567890ABCD00000001 /* PoseDetectionPlugin.swift in Sources */,
+				AA1234567890ABCD00000002 /* CameraManager.swift in Sources */,
+				AA1234567890ABCD00000003 /* PoseDetector.swift in Sources */,
+				AA1234567890ABCD00000004 /* VideoTexture.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
