@@ -47,7 +47,8 @@ class CameraManager: NSObject {
             guard let self = self else { return }
             
             let session = AVCaptureSession()
-            session.sessionPreset = .medium
+            session.sessionPreset = .hd1280x720 // HD 720p 해상도
+            NSLog("[CameraManager] Using HD 1280x720 resolution")
             
             // 카메라 디바이스 찾기
             guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera,

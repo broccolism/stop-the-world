@@ -53,6 +53,10 @@ public class PoseDetectionPlugin: NSObject, FlutterPlugin {
             }
         case "hasReferencePose":
             hasReferencePose(result: result)
+        case "captureSnapshot":
+            captureSnapshot(result: result)
+        case "loadSnapshotPath":
+            loadSnapshotPath(result: result)
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -176,6 +180,78 @@ public class PoseDetectionPlugin: NSObject, FlutterPlugin {
     private func hasReferencePose(result: @escaping FlutterResult) {
         let hasReference = UserDefaults.standard.string(forKey: "reference_pose") != nil
         result(hasReference)
+    }
+    
+    private func captureSnapshot(result: @escaping FlutterResult) {
+        guard let cameraManager = cameraManager else {
+            result(FlutterError(code: "NOT_INITIALIZED",
+                              message: "Camera not initialized",
+                              details: nil))
+            return
+        }
+        
+        cameraManager.captureFrame { pixelBuffer in
+            guard let pixelBuffer = pixelBuffer else {
+                result(FlutterError(code: "NO_FRAME",
+                                  message: "No frame available",
+                                  details: nil))
+                return
+            }
+            
+            // CVPixelBuffer를 NSImage로 변환
+            let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+            let context = CIContext()
+            guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
+                result(FlutterError(code: "CONVERSION_ERROR",
+                                  message: "Failed to convert frame to image",
+                                  details: nil))
+                return
+            }
+            
+            let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+            
+            // PNG 데이터로 변환
+            guard let tiffData = nsImage.tiffRepresentation,
+                  let bitmapImage = NSBitmapImageRep(data: tiffData),
+                  let pngData = bitmapImage.representation(using: .png, properties: [:]) else {
+                result(FlutterError(code: "CONVERSION_ERROR",
+                                  message: "Failed to convert image to PNG",
+                                  details: nil))
+                return
+            }
+            
+            // 파일로 저장
+            let fileManager = FileManager.default
+            guard let documentsDirectory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+                result(FlutterError(code: "FILE_ERROR",
+                                  message: "Documents directory not found",
+                                  details: nil))
+                return
+            }
+            
+            let fileName = "reference_pose_snapshot.png"
+            let fileURL = documentsDirectory.appendingPathComponent(fileName)
+            
+            do {
+                try pngData.write(to: fileURL)
+                // 파일 경로 저장
+                UserDefaults.standard.set(fileURL.path, forKey: "reference_snapshot_path")
+                result(fileURL.path)
+            } catch {
+                result(FlutterError(code: "FILE_ERROR",
+                                  message: "Failed to save snapshot: \(error.localizedDescription)",
+                                  details: nil))
+            }
+        }
+    }
+    
+    private func loadSnapshotPath(result: @escaping FlutterResult) {
+        if let path = UserDefaults.standard.string(forKey: "reference_snapshot_path"),
+           FileManager.default.fileExists(atPath: path) {
+            result(path)
+        } else {
+            result(nil)
+        }
     }
 }
 

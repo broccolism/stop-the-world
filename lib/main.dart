@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'pages/settings_page.dart';
 import 'pages/reminder_page.dart';
+import 'services/pose_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,6 +61,8 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   Timer? _reminderTimer;
   bool _isReminderShowing = false;
+  bool _isReminderRunning = false; // 리마인더 실행 중 여부
+  final PoseService _poseService = PoseService();
 
   // TODO: 나중에 UI에서 편집 가능하게 변경 예정
   final List<String> _blockedApps = ['zoom.us']; // Zoom 앱
@@ -67,9 +70,58 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startReminderLoop();
+    // 자동 시작 제거 - 사용자가 수동으로 시작해야 함
+  }
+
+  // 리마인더 시작
+  Future<void> _startReminder() async {
+    final hasReferencePose = await _hasReferencePose();
+    
+    if (!hasReferencePose) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('먼저 자세를 설정해주세요!'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+    
+    if (_reminderTimer != null) {
+      debugPrint('[Reminder] Timer already running');
+      return;
+    }
+    
+    setState(() {
+      _isReminderRunning = true;
     });
+    
+    debugPrint('[Reminder] Starting reminder loop');
+    _startReminderLoop();
+  }
+  
+  // 리마인더 일시중단
+  void _pauseReminder() {
+    _reminderTimer?.cancel();
+    _reminderTimer = null;
+    
+    setState(() {
+      _isReminderRunning = false;
+    });
+    
+    debugPrint('[Reminder] Paused reminder loop');
+  }
+
+  // 기준 자세가 설정되어 있는지 확인
+  Future<bool> _hasReferencePose() async {
+    try {
+      return await _poseService.hasReferencePose();
+    } catch (e) {
+      debugPrint('[Reminder] Error checking reference pose: $e');
+      return false;
+    }
   }
 
   // 실행 중인 앱 목록을 가져오는 함수 (ps 명령어 사용, 권한 불필요)
@@ -122,9 +174,9 @@ class _MyHomePageState extends State<MyHomePage> {
     return false;
   }
 
-  // 1시간마다 리마인더 표시
+  // 20초마다 리마인더 표시 (테스트용)
   void _startReminderLoop() {
-    Timer.periodic(const Duration(hours: 1), (timer) async {
+    Timer.periodic(const Duration(seconds: 20), (timer) async {
       if (_isReminderShowing) {
         debugPrint('[Reminder] Already showing, skipping...');
         return;
@@ -139,6 +191,27 @@ class _MyHomePageState extends State<MyHomePage> {
       debugPrint('[Reminder] Showing reminder...');
       await _showReminder();
     });
+  }
+
+  // 설정 페이지 표시
+  Future<void> _showSettings() async {
+    if (!mounted) return;
+    
+    try {
+      debugPrint('[Settings] Showing settings page');
+      
+      // 설정 페이지로 이동 (창 크기 유지)
+      if (mounted) {
+        await Navigator.pushNamed(context, '/settings');
+      }
+      
+      debugPrint('[Settings] Settings page closed');
+      
+      // 자세 설정 완료 후에도 자동 시작하지 않음 (사용자가 수동으로 시작)
+      
+    } catch (e) {
+      debugPrint('[Settings] Error: $e');
+    }
   }
 
   // 리마인더 페이지 표시
@@ -201,9 +274,7 @@ class _MyHomePageState extends State<MyHomePage> {
           IconButton(
             icon: const Icon(Icons.settings),
             tooltip: '설정',
-            onPressed: () {
-              Navigator.pushNamed(context, '/settings');
-            },
+            onPressed: _showSettings,
           ),
           IconButton(
             icon: const Icon(Icons.close),
@@ -242,9 +313,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               const SizedBox(height: 30),
               ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pushNamed(context, '/settings');
-                },
+                onPressed: _showSettings,
                 icon: const Icon(Icons.camera_alt),
                 label: const Text('자세 설정'),
                 style: ElevatedButton.styleFrom(
@@ -254,7 +323,20 @@ class _MyHomePageState extends State<MyHomePage> {
                   textStyle: const TextStyle(fontSize: 16),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
+              // 리마인더 시작/일시중단 버튼
+              ElevatedButton.icon(
+                onPressed: _isReminderRunning ? _pauseReminder : _startReminder,
+                icon: Icon(_isReminderRunning ? Icons.pause_circle : Icons.play_circle),
+                label: Text(_isReminderRunning ? '리마인더 일시중단' : '리마인더 시작'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _isReminderRunning ? Colors.orange : Colors.green,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                  textStyle: const TextStyle(fontSize: 16),
+                ),
+              ),
+              const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: () async {
                   debugPrint('[App] Exiting...');

@@ -28,7 +28,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _initializeCamera() async {
     try {
+      debugPrint('[Settings] Initializing camera...');
       final textureId = await _poseService.startCamera();
+      debugPrint('[Settings] Camera initialized with textureId: $textureId');
       setState(() {
         _textureId = textureId;
         _isInitialized = true;
@@ -36,6 +38,7 @@ class _SettingsPageState extends State<SettingsPage> {
       });
       _startDetectionLoop();
     } catch (e) {
+      debugPrint('[Settings] Camera initialization failed: $e');
       setState(() {
         _statusMessage = '카메라 초기화 실패: $e';
       });
@@ -43,6 +46,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _startDetectionLoop() {
+    debugPrint('[Settings] Starting detection loop...');
     _detectionTimer = Timer.periodic(const Duration(milliseconds: 200), (timer) async {
       if (!mounted) return;
       
@@ -51,6 +55,12 @@ class _SettingsPageState extends State<SettingsPage> {
         if (mounted) {
           setState(() {
             _currentPose = pose;
+            if (pose != null && pose.joints.isNotEmpty) {
+              debugPrint('[Settings] Detected ${pose.joints.length} joints: ${pose.joints.keys.join(", ")}');
+              _statusMessage = '${pose.joints.length}개 관절 감지됨 - 자세를 취하고 기록하세요';
+            } else {
+              _statusMessage = '자세를 감지할 수 없습니다. 상체를 카메라에 보여주세요.';
+            }
           });
         }
       } catch (e) {
@@ -60,30 +70,48 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _recordPose() async {
-    if (_currentPose == null) {
-      setState(() {
-        _statusMessage = '자세가 감지되지 않았습니다';
-      });
-      return;
-    }
+    // 테스트용: 자세 감지 여부와 무관하게 무조건 기록 가능
+    debugPrint('[Settings] Recording pose - currentPose: ${_currentPose != null ? "${_currentPose!.joints.length} joints" : "NULL"}');
 
     setState(() {
       _isRecording = true;
-      _statusMessage = '자세 저장 중...';
+      if (_currentPose != null && _currentPose!.joints.isNotEmpty) {
+        _statusMessage = '자세 저장 중... (${_currentPose!.joints.length}개 관절)';
+      } else {
+        _statusMessage = '자세 저장 중... (감지된 관절 없음 - 테스트 모드)';
+      }
     });
 
     try {
-      await _poseService.saveReferencePose(_currentPose!);
+      // null이면 빈 PoseData 생성
+      final poseToSave = _currentPose ?? PoseData(
+        joints: {},
+        timestamp: DateTime.now(),
+      );
+      
+      // 자세 데이터 저장
+      await _poseService.saveReferencePose(poseToSave);
+      
+      // 스냅샷 저장
+      try {
+        final snapshotPath = await _poseService.captureSnapshot();
+        debugPrint('[Settings] Snapshot saved to: $snapshotPath');
+      } catch (e) {
+        debugPrint('[Settings] Failed to save snapshot: $e');
+        // 스냅샷 저장 실패해도 자세 데이터는 저장됨
+      }
+      
       setState(() {
-        _statusMessage = '자세가 저장되었습니다!';
+        _statusMessage = '자세가 저장되었습니다! ✓';
       });
 
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(seconds: 1));
       
       if (mounted) {
         Navigator.pop(context);
       }
     } catch (e) {
+      debugPrint('[Settings] Save error: $e');
       setState(() {
         _statusMessage = '저장 실패: $e';
       });
@@ -111,92 +139,62 @@ class _SettingsPageState extends State<SettingsPage> {
         foregroundColor: Colors.white,
         title: const Text('자세 설정'),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _isInitialized
-                ? CameraPreviewWidget(
-                    textureId: _textureId,
-                    currentPose: _currentPose,
-                  )
-                : Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const CircularProgressIndicator(),
-                        const SizedBox(height: 16),
-                        Text(_statusMessage),
-                      ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: _isInitialized
+                  ? CameraPreviewWidget(
+                      textureId: _textureId,
+                      currentPose: _currentPose,
+                    )
+                  : Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const CircularProgressIndicator(),
+                          const SizedBox(height: 16),
+                          Text(_statusMessage),
+                        ],
+                      ),
                     ),
+            ),
+            Container(
+              color: Colors.black87,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _statusMessage,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-          ),
-          Container(
-            color: Colors.black87,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Column(
-                  children: [
-                    Text(
-                      _statusMessage,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '※ 카메라는 백그라운드에서 작동 중입니다',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontSize: 12,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    Text(
-                      '화면의 색상 점들이 감지된 관절입니다',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontSize: 12,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      icon: const Icon(Icons.close),
-                      label: const Text('취소'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: _isInitialized && !_isRecording && _currentPose != null
-                          ? _recordPose
-                          : null,
-                      icon: const Icon(Icons.check),
-                      label: const Text('자세 기록'),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _recordPose,
+                      icon: const Icon(Icons.check_circle),
+                      label: const Text('자세 기록하기'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.deepPurple,
                         foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

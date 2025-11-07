@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/pose_service.dart';
 import '../models/pose_data.dart';
@@ -21,6 +22,7 @@ class _ReminderPageState extends State<ReminderPage> {
   String _statusMessage = '카메라 초기화 중...';
   Timer? _detectionTimer;
   bool _hasReference = false;
+  String? _snapshotPath; // 기준 자세 스냅샷 경로
 
   @override
   void initState() {
@@ -50,6 +52,10 @@ class _ReminderPageState extends State<ReminderPage> {
       // 기준 자세 로드
       _referencePose = await _poseService.loadReferencePose();
       
+      // 스냅샷 경로 로드
+      _snapshotPath = await _poseService.loadSnapshotPath();
+      debugPrint('[Reminder] Snapshot path: $_snapshotPath');
+      
       // 카메라 시작
       final textureId = await _poseService.startCamera();
       
@@ -61,6 +67,7 @@ class _ReminderPageState extends State<ReminderPage> {
       
       _startDetectionLoop();
     } catch (e) {
+      debugPrint('[Reminder] error while initilizing: $e');
       setState(() {
         _statusMessage = '초기화 실패: $e';
       });
@@ -81,8 +88,15 @@ class _ReminderPageState extends State<ReminderPage> {
               _currentPose = pose;
               _similarity = similarity;
               
-              // 유사도 업데이트
-              if (similarity >= 0.85) {
+              // 테스트 모드: 관절이 없으면 자동 통과
+              if (pose.joints.isEmpty || _referencePose!.joints.isEmpty) {
+                _statusMessage = '테스트 모드: 자동 통과 (관절 감지 없음)';
+                Future.delayed(const Duration(seconds: 1), () {
+                  if (mounted) {
+                    Navigator.pop(context);
+                  }
+                });
+              } else if (similarity >= 0.50) {
                 _statusMessage = '완벽합니다! (${(similarity * 100).toStringAsFixed(1)}%)';
                 
                 // 1초 후 자동으로 닫기
@@ -91,7 +105,7 @@ class _ReminderPageState extends State<ReminderPage> {
                     Navigator.pop(context);
                   }
                 });
-              } else if (similarity >= 0.7) {
+              } else if (similarity >= 0.35) {
                 _statusMessage = '조금만 더! (${(similarity * 100).toStringAsFixed(1)}%)';
               } else {
                 _statusMessage = '자세를 맞춰주세요 (${(similarity * 100).toStringAsFixed(1)}%)';
@@ -152,6 +166,59 @@ class _ReminderPageState extends State<ReminderPage> {
                     textAlign: TextAlign.center,
                   ),
                 ],
+              ),
+            ),
+          
+          // 기준 자세 스냅샷 (좌상단)
+          if (_isInitialized && _snapshotPath != null && File(_snapshotPath!).existsSync())
+            Positioned(
+              top: 20,
+              left: 20,
+              child: Container(
+                width: 150,
+                height: 200,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.green, width: 3),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(128),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Stack(
+                    children: [
+                      Image.file(
+                        File(_snapshotPath!),
+                        fit: BoxFit.cover,
+                        width: 150,
+                        height: 200,
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          color: Colors.green.withAlpha(179),
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: const Text(
+                            '기준 자세',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           
@@ -226,8 +293,8 @@ class _ReminderPageState extends State<ReminderPage> {
 
   Color _getSimilarityColor() {
     if (_similarity == null) return Colors.red;
-    if (_similarity! >= 0.85) return Colors.green;
-    if (_similarity! >= 0.7) return Colors.yellow;
+    if (_similarity! >= 0.50) return Colors.green;
+    if (_similarity! >= 0.35) return Colors.yellow;
     return Colors.red;
   }
 }

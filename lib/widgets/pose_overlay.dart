@@ -23,9 +23,9 @@ class PoseOverlay extends CustomPainter {
     if (currentPose != null) {
       Color color = Colors.red;
       if (similarity != null) {
-        if (similarity! >= 0.85) {
+        if (similarity! >= 0.50) {
           color = Colors.green;
-        } else if (similarity! >= 0.7) {
+        } else if (similarity! >= 0.35) {
           color = Colors.yellow;
         }
       }
