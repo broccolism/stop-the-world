@@ -70,27 +70,35 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _recordPose() async {
-    // 테스트용: 자세 감지 여부와 무관하게 무조건 기록 가능
     debugPrint('[Settings] Recording pose - currentPose: ${_currentPose != null ? "${_currentPose!.joints.length} joints" : "NULL"}');
+
+    // 관절이 감지되지 않았으면 저장하지 않음
+    if (_currentPose == null || _currentPose!.joints.isEmpty) {
+      setState(() {
+        _statusMessage = '자세가 감지되지 않았습니다!\n상체를 카메라에 보여주세요';
+      });
+      
+      // 2초 후 원래 메시지로 복원
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            _statusMessage = '자세를 감지할 수 없습니다. 상체를 카메라에 보여주세요.';
+          });
+        }
+      });
+      
+      return;
+    }
 
     setState(() {
       _isRecording = true;
-      if (_currentPose != null && _currentPose!.joints.isNotEmpty) {
-        _statusMessage = '자세 저장 중... (${_currentPose!.joints.length}개 관절)';
-      } else {
-        _statusMessage = '자세 저장 중... (감지된 관절 없음 - 테스트 모드)';
-      }
+      _statusMessage = '자세 저장 중... (${_currentPose!.joints.length}개 관절)';
     });
 
     try {
-      // null이면 빈 PoseData 생성
-      final poseToSave = _currentPose ?? PoseData(
-        joints: {},
-        timestamp: DateTime.now(),
-      );
-      
       // 자세 데이터 저장
-      await _poseService.saveReferencePose(poseToSave);
+      await _poseService.saveReferencePose(_currentPose!);
+      debugPrint('[Settings] Saved pose with ${_currentPose!.joints.length} joints');
       
       // 스냅샷 저장
       try {

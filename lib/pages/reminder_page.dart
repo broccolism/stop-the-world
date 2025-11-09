@@ -23,6 +23,8 @@ class _ReminderPageState extends State<ReminderPage> {
   Timer? _detectionTimer;
   bool _hasReference = false;
   String? _snapshotPath; // 기준 자세 스냅샷 경로
+  double _cameraOpacity = 0.6; // 카메라 투명도 (초기값 60%)
+  bool _isClosing = false; // 닫기 작업 중 플래그
 
   @override
   void initState() {
@@ -76,35 +78,37 @@ class _ReminderPageState extends State<ReminderPage> {
 
   void _startDetectionLoop() {
     _detectionTimer = Timer.periodic(const Duration(milliseconds: 200), (timer) async {
-      if (!mounted) return;
+      if (!mounted || _isClosing) return;
       
       try {
         final pose = await _poseService.detectPose();
         if (pose != null && _referencePose != null) {
+          // 기준 자세에 관절이 없으면 에러
+          if (_referencePose!.joints.isEmpty) {
+            debugPrint('[Reminder] ERROR: Reference pose has no joints!');
+            if (mounted && !_isClosing) {
+              setState(() {
+                _statusMessage = '기준 자세 데이터 오류\n설정을 다시 해주세요';
+              });
+            }
+            return;
+          }
+          
           final similarity = await _poseService.comparePoses(_referencePose!, pose);
           
-          if (mounted) {
+          if (mounted && !_isClosing) {
             setState(() {
               _currentPose = pose;
               _similarity = similarity;
               
-              // 테스트 모드: 관절이 없으면 자동 통과
-              if (pose.joints.isEmpty || _referencePose!.joints.isEmpty) {
-                _statusMessage = '테스트 모드: 자동 통과 (관절 감지 없음)';
-                Future.delayed(const Duration(seconds: 1), () {
-                  if (mounted) {
-                    Navigator.pop(context);
-                  }
-                });
+              // 현재 자세에 관절이 없으면
+              if (pose.joints.isEmpty) {
+                _statusMessage = '자세가 감지되지 않았습니다';
               } else if (similarity >= 0.50) {
                 _statusMessage = '완벽합니다! (${(similarity * 100).toStringAsFixed(1)}%)';
                 
-                // 1초 후 자동으로 닫기
-                Future.delayed(const Duration(seconds: 1), () {
-                  if (mounted) {
-                    Navigator.pop(context);
-                  }
-                });
+                // 자동으로 닫기
+                _closeWithDelay();
               } else if (similarity >= 0.35) {
                 _statusMessage = '조금만 더! (${(similarity * 100).toStringAsFixed(1)}%)';
               } else {
@@ -113,7 +117,7 @@ class _ReminderPageState extends State<ReminderPage> {
             });
           }
         } else {
-          if (mounted) {
+          if (mounted && !_isClosing) {
             setState(() {
               _currentPose = pose;
               _statusMessage = '자세가 감지되지 않았습니다';
@@ -126,7 +130,24 @@ class _ReminderPageState extends State<ReminderPage> {
     });
   }
 
+  void _closeWithDelay() {
+    if (_isClosing) return;
+    
+    _isClosing = true;
+    _detectionTimer?.cancel();
+    
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    });
+  }
+
   void _skip() {
+    if (_isClosing) return;
+    
+    _isClosing = true;
+    _detectionTimer?.cancel();
     Navigator.pop(context);
   }
 
@@ -143,15 +164,16 @@ class _ReminderPageState extends State<ReminderPage> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 카메라 프리뷰 및 자세 오버레이
-          if (_isInitialized)
-            CameraPreviewWidget(
-              textureId: _textureId,
-              currentPose: _currentPose,
-              referencePose: _referencePose,
-              similarity: _similarity,
+          // 1. 기준 자세 이미지 배경 (전체 화면)
+          if (_isInitialized && _snapshotPath != null && File(_snapshotPath!).existsSync())
+            Positioned.fill(
+              child: Image.file(
+                File(_snapshotPath!),
+                fit: BoxFit.contain,
+              ),
             )
-          else
+          else if (!_isInitialized)
+            // 초기화 중 화면
             Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -169,60 +191,70 @@ class _ReminderPageState extends State<ReminderPage> {
               ),
             ),
           
-          // 기준 자세 스냅샷 (좌상단)
-          if (_isInitialized && _snapshotPath != null && File(_snapshotPath!).existsSync())
+          // 2. 투명도가 적용된 카메라 프리뷰
+          if (_isInitialized)
+            CameraPreviewWidget(
+              textureId: _textureId,
+              currentPose: _currentPose,
+              referencePose: _referencePose,
+              similarity: _similarity,
+              opacity: _cameraOpacity,
+            ),
+          
+          // 3. 투명도 슬라이더 (우측 하단)
+          if (_isInitialized)
             Positioned(
-              top: 20,
-              left: 20,
+              right: 20,
+              bottom: 20,
               child: Container(
-                width: 150,
-                height: 200,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.green, width: 3),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(128),
-                      blurRadius: 10,
-                      spreadRadius: 2,
-                    ),
-                  ],
+                  color: Colors.black.withAlpha(179),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Stack(
-                    children: [
-                      Image.file(
-                        File(_snapshotPath!),
-                        fit: BoxFit.cover,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.opacity,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    const SizedBox(height: 8),
+                    RotatedBox(
+                      quarterTurns: 3, // 세로 슬라이더
+                      child: SizedBox(
                         width: 150,
-                        height: 200,
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        child: Container(
-                          color: Colors.green.withAlpha(179),
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: const Text(
-                            '기준 자세',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                        child: Slider(
+                          value: _cameraOpacity,
+                          min: 0.3,
+                          max: 1.0,
+                          divisions: 7,
+                          activeColor: Colors.white,
+                          inactiveColor: Colors.white.withAlpha(77),
+                          onChanged: (value) {
+                            setState(() {
+                              _cameraOpacity = value;
+                            });
+                          },
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${(_cameraOpacity * 100).toInt()}%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           
-          // 상단 유사도 표시
+          // 4. 상단 유사도 표시
           if (_isInitialized && _similarity != null)
             Positioned(
               top: 40,
@@ -247,7 +279,7 @@ class _ReminderPageState extends State<ReminderPage> {
               ),
             ),
           
-          // 상태 메시지
+          // 5. 상태 메시지
           if (_isInitialized)
             Positioned(
               top: 120,
@@ -272,7 +304,7 @@ class _ReminderPageState extends State<ReminderPage> {
               ),
             ),
           
-          // 건너뛰기 버튼
+          // 6. 건너뛰기 버튼 (우측 상단)
           if (_isInitialized)
             Positioned(
               top: 40,

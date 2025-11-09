@@ -57,38 +57,45 @@ class PoseDetector {
     private func extractJoints(from observation: VNHumanBodyPoseObservation) -> [String: Any] {
         var joints: [String: [String: Double]] = [:]
         
-        // Vision Framework에서 제공하는 주요 관절들
-        let jointNames: [VNHumanBodyPoseObservation.JointName] = [
-            .nose,
-            .leftEye, .rightEye,
-            .leftEar, .rightEar,
-            .leftShoulder, .rightShoulder,
-            .leftElbow, .rightElbow,
-            .leftWrist, .rightWrist,
-            .leftHip, .rightHip,
-            .leftKnee, .rightKnee,
-            .leftAnkle, .rightAnkle,
-            .neck,
-            .root
+        // Vision Framework 관절 이름을 Flutter 코드가 기대하는 이름으로 매핑
+        let jointMapping: [(VNHumanBodyPoseObservation.JointName, String)] = [
+            (.nose, "nose_1"),
+            (.leftEye, "left_eye_1"),
+            (.rightEye, "right_eye_1"),
+            (.leftEar, "left_ear_1"),
+            (.rightEar, "right_ear_1"),
+            (.leftShoulder, "left_shoulder_1"),
+            (.rightShoulder, "right_shoulder_1"),
+            (.leftElbow, "left_elbow_1"),
+            (.rightElbow, "right_elbow_1"),
+            (.leftWrist, "left_wrist_1"),
+            (.rightWrist, "right_wrist_1"),
+            (.leftHip, "left_hip_1"),
+            (.rightHip, "right_hip_1"),
+            (.leftKnee, "left_knee_1"),
+            (.rightKnee, "right_knee_1"),
+            (.leftAnkle, "left_ankle_1"),
+            (.rightAnkle, "right_ankle_1"),
+            (.neck, "neck_1"),
+            (.root, "root_1")
         ]
         
         var detectedCount = 0
-        for jointName in jointNames {
-            if let joint = try? observation.recognizedPoint(jointName) {
+        for (visionJoint, customName) in jointMapping {
+            if let joint = try? observation.recognizedPoint(visionJoint) {
                 // 신뢰도 체크 없음 - 모든 감지된 관절 포함
-                let keyName = jointName.rawValue.rawValue
-                joints[keyName] = [
+                joints[customName] = [
                     "x": Double(joint.location.x),
                     "y": Double(joint.location.y),
                     "confidence": Double(joint.confidence)
                 ]
                 detectedCount += 1
                 // 각 관절의 이름과 신뢰도 출력
-                NSLog("[PoseDetector]   - %@: confidence=%.2f", keyName, joint.confidence)
+                NSLog("[PoseDetector]   - %@: confidence=%.2f", customName, joint.confidence)
             }
         }
         
-        NSLog("[PoseDetector] Detected %d joints out of %d", detectedCount, jointNames.count)
+        NSLog("[PoseDetector] Detected %d joints out of %d", detectedCount, jointMapping.count)
         NSLog("[PoseDetector] Joint keys: %@", Array(joints.keys).joined(separator: ", "))
         
         // 노트북 사용자는 보통 얼굴과 상체만 보임 - 최소 1개 관절만 있으면 OK

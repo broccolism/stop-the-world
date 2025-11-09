@@ -13,7 +13,7 @@ void main() async {
 
   // 메인 앱용 옵션
   WindowOptions windowOptions = const WindowOptions(
-    size: Size(400, 300),
+    size: Size(500, 480),
     center: true,
     titleBarStyle: TitleBarStyle.hidden,
     skipTaskbar: false,
@@ -174,22 +174,39 @@ class _MyHomePageState extends State<MyHomePage> {
     return false;
   }
 
-  // 20초마다 리마인더 표시 (테스트용)
+  // 리마인더 루프 시작 - 리마인더가 닫힌 후부터 다시 타이머 시작
   void _startReminderLoop() {
-    Timer.periodic(const Duration(seconds: 20), (timer) async {
-      if (_isReminderShowing) {
-        debugPrint('[Reminder] Already showing, skipping...');
+    _scheduleNextReminder();
+  }
+  
+  // 다음 리마인더 예약 (20초 후)
+  void _scheduleNextReminder() {
+    if (!_isReminderRunning) {
+      debugPrint('[Reminder] Loop stopped, not scheduling next reminder');
+      return;
+    }
+    
+    debugPrint('[Reminder] Scheduling next reminder in 20 seconds...');
+    _reminderTimer = Timer(const Duration(seconds: 20), () async {
+      if (!_isReminderRunning || _isReminderShowing) {
+        debugPrint('[Reminder] Skipping reminder (running: $_isReminderRunning, showing: $_isReminderShowing)');
+        _scheduleNextReminder(); // 다시 예약
         return;
       }
       
       // 블랙리스트 앱 체크
       if (await _isBlockedAppRunning()) {
         debugPrint('[Reminder] Blocked app is running, skipping reminder...');
+        _scheduleNextReminder(); // 다시 예약
         return;
       }
       
       debugPrint('[Reminder] Showing reminder...');
       await _showReminder();
+      
+      // 리마인더가 닫힌 후 다음 리마인더 예약
+      debugPrint('[Reminder] Reminder closed, scheduling next one');
+      _scheduleNextReminder();
     });
   }
 
@@ -243,7 +260,7 @@ class _MyHomePageState extends State<MyHomePage> {
       debugPrint('[Reminder] Reminder page closed');
       
       // 원래 창 크기로 복원
-      await windowManager.setSize(const Size(400, 300));
+      await windowManager.setSize(const Size(500, 480));
       await windowManager.center();
       
       // 최상단 해제 후 최소화
