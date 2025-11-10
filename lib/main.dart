@@ -124,53 +124,11 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  // 실행 중인 앱 목록을 가져오는 함수 (ps 명령어 사용, 권한 불필요)
-  Future<List<String>> _getRunningApps() async {
-    try {
-      if (Platform.isMacOS) {
-        // ps 명령어로 실행 중인 프로세스 이름 가져오기
-        final result = await Process.run('ps', ['-ax', '-o', 'comm']);
-        
-        if (result.exitCode == 0) {
-          final output = (result.stdout as String).trim();
-          if (output.isEmpty) {
-            debugPrint('[Apps] Warning: Empty output from ps command');
-            return [];
-          }
-          
-          // 각 줄이 프로세스 경로, 소문자로 변환하여 리스트로
-          final lines = output.split('\n');
-          final apps = lines
-              .where((line) => line.isNotEmpty)
-              .map((line) => line.trim().toLowerCase())
-              .toList();
-          
-          debugPrint('[Apps] Found ${apps.length} running processes');
-          // 디버그: 처음 10개만 출력
-          debugPrint('[Apps] Sample: ${apps.take(10).toList()}');
-          return apps;
-        } else {
-          debugPrint('[Apps] ps command failed with exit code: ${result.exitCode}');
-        }
-      }
-    } catch (e, st) {
-      debugPrint('[Apps] Error getting running apps: $e');
-      debugPrint('[Apps] Stack trace: $st');
-    }
-    return [];
-  }
-
   // 블랙리스트 앱이 실행 중인지 확인
+  // 참고: Sandbox 모드에서는 프로세스 목록을 읽을 수 없으므로 이 기능은 비활성화됨
   Future<bool> _isBlockedAppRunning() async {
-    final runningApps = await _getRunningApps();
-    
-    for (final blockedApp in _blockedApps) {
-      if (runningApps.any((app) => app.contains(blockedApp.toLowerCase()))) {
-        debugPrint('[Apps] Blocked app detected: $blockedApp');
-        return true;
-      }
-    }
-    
+    // Sandbox 모드에서는 ps 명령어 실행 불가
+    // 추후 NSWorkspace API를 사용하여 구현 가능
     return false;
   }
 
@@ -217,17 +175,36 @@ class _MyHomePageState extends State<MyHomePage> {
     try {
       debugPrint('[Settings] Showing settings page');
       
-      // 설정 페이지로 이동 (창 크기 유지)
+      // 창 크기 변경 (설정 화면용)
+      try {
+        await windowManager.setSize(const Size(600, 800));
+        await Future.delayed(const Duration(milliseconds: 100));
+        await windowManager.center();
+      } catch (e) {
+        debugPrint('[Settings] Window resize error: $e');
+      }
+      
+      // 설정 페이지로 이동
       if (mounted) {
         await Navigator.pushNamed(context, '/settings');
       }
       
       debugPrint('[Settings] Settings page closed');
       
+      // 원래 창 크기로 복원
+      try {
+        await windowManager.setSize(const Size(500, 480));
+        await Future.delayed(const Duration(milliseconds: 100));
+        await windowManager.center();
+      } catch (e) {
+        debugPrint('[Settings] Window restore error: $e');
+      }
+      
       // 자세 설정 완료 후에도 자동 시작하지 않음 (사용자가 수동으로 시작)
       
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('[Settings] Error: $e');
+      debugPrint('[Settings] Stack trace: $stackTrace');
     }
   }
 
@@ -235,41 +212,78 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<void> _showReminder() async {
     if (!mounted) return;
     
+    // 기준 자세가 있는지 먼저 확인
+    final hasReferencePose = await _hasReferencePose();
+    if (!hasReferencePose) {
+      debugPrint('[Reminder] No reference pose, skipping reminder');
+      return;
+    }
+    
     _isReminderShowing = true;
     
     try {
+      debugPrint('[Reminder] Starting window manager operations...');
+      
       // 창 크기 변경 (리마인더 화면용)
-      await windowManager.setSize(const Size(600, 800));
-      await windowManager.center();
+      try {
+        await windowManager.setSize(const Size(600, 800));
+        await Future.delayed(const Duration(milliseconds: 100));
+        await windowManager.center();
+      } catch (e) {
+        debugPrint('[Reminder] Window resize error: $e');
+      }
       
       // 최소화되어 있으면 복원
-      await windowManager.restore();
+      try {
+        await windowManager.restore();
+        await Future.delayed(const Duration(milliseconds: 50));
+      } catch (e) {
+        debugPrint('[Reminder] Window restore error: $e');
+      }
       
       // 최상단으로 올리고 포커스 주기
-      await windowManager.setAlwaysOnTop(true);
-      await windowManager.show();
-      await windowManager.focus();
+      try {
+        await windowManager.setAlwaysOnTop(true);
+        await windowManager.show();
+        await windowManager.focus();
+      } catch (e) {
+        debugPrint('[Reminder] Window focus error: $e');
+      }
       
-      debugPrint('[Reminder] Showing reminder page');
+      debugPrint('[Reminder] About to show reminder page...');
       
       // 리마인더 페이지로 이동
       if (mounted) {
+        debugPrint('[Reminder] Calling Navigator.pushNamed...');
         await Navigator.pushNamed(context, '/reminder');
+        debugPrint('[Reminder] Navigator.pushNamed completed');
+      } else {
+        debugPrint('[Reminder] Widget not mounted, skipping');
       }
       
       debugPrint('[Reminder] Reminder page closed');
       
       // 원래 창 크기로 복원
-      await windowManager.setSize(const Size(500, 480));
-      await windowManager.center();
+      try {
+        await windowManager.setSize(const Size(500, 480));
+        await Future.delayed(const Duration(milliseconds: 100));
+        await windowManager.center();
+      } catch (e) {
+        debugPrint('[Reminder] Window restore size error: $e');
+      }
       
       // 최상단 해제 후 최소화
-      await windowManager.setAlwaysOnTop(false);
-      await windowManager.minimize();
+      try {
+        await windowManager.setAlwaysOnTop(false);
+        await windowManager.minimize();
+      } catch (e) {
+        debugPrint('[Reminder] Window minimize error: $e');
+      }
       
       debugPrint('[Reminder] Window minimized');
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('[Reminder] Error: $e');
+      debugPrint('[Reminder] Stack trace: $stackTrace');
     } finally {
       _isReminderShowing = false;
     }

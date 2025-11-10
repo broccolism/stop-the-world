@@ -25,6 +25,8 @@ class _ReminderPageState extends State<ReminderPage> {
   String? _snapshotPath; // 기준 자세 스냅샷 경로
   double _cameraOpacity = 0.6; // 카메라 투명도 (초기값 60%)
   bool _isClosing = false; // 닫기 작업 중 플래그
+  DateTime? _goodPoseStartTime; // 좋은 자세를 유지하기 시작한 시간
+  static const Duration _requiredHoldDuration = Duration(seconds: 3); // 필요한 유지 시간
 
   @override
   void initState() {
@@ -33,9 +35,13 @@ class _ReminderPageState extends State<ReminderPage> {
   }
 
   Future<void> _initialize() async {
+    debugPrint('[Reminder] Initialize started');
+    
     // 기준 자세 확인
     try {
+      debugPrint('[Reminder] Checking for reference pose...');
       _hasReference = await _poseService.hasReferencePose();
+      debugPrint('[Reminder] Has reference: $_hasReference');
       
       if (!_hasReference) {
         // 기준 자세가 없으면 2초 후 자동으로 닫기
@@ -52,14 +58,19 @@ class _ReminderPageState extends State<ReminderPage> {
       }
 
       // 기준 자세 로드
+      debugPrint('[Reminder] Loading reference pose...');
       _referencePose = await _poseService.loadReferencePose();
+      debugPrint('[Reminder] Reference pose loaded with ${_referencePose?.joints.length ?? 0} joints');
       
       // 스냅샷 경로 로드
+      debugPrint('[Reminder] Loading snapshot path...');
       _snapshotPath = await _poseService.loadSnapshotPath();
       debugPrint('[Reminder] Snapshot path: $_snapshotPath');
       
       // 카메라 시작
+      debugPrint('[Reminder] Starting camera...');
       final textureId = await _poseService.startCamera();
+      debugPrint('[Reminder] Camera started with textureId: $textureId');
       
       setState(() {
         _textureId = textureId;
@@ -67,7 +78,9 @@ class _ReminderPageState extends State<ReminderPage> {
         _statusMessage = '기준 자세와 맞춰주세요';
       });
       
+      debugPrint('[Reminder] Starting detection loop...');
       _startDetectionLoop();
+      debugPrint('[Reminder] Initialize completed successfully');
     } catch (e) {
       debugPrint('[Reminder] error while initilizing: $e');
       setState(() {
@@ -104,15 +117,42 @@ class _ReminderPageState extends State<ReminderPage> {
               // 현재 자세에 관절이 없으면
               if (pose.joints.isEmpty) {
                 _statusMessage = '자세가 감지되지 않았습니다';
+                _goodPoseStartTime = null; // 타이머 리셋
               } else if (similarity >= 0.50) {
-                _statusMessage = '완벽합니다! (${(similarity * 100).toStringAsFixed(1)}%)';
-                
-                // 자동으로 닫기
-                _closeWithDelay();
-              } else if (similarity >= 0.35) {
-                _statusMessage = '조금만 더! (${(similarity * 100).toStringAsFixed(1)}%)';
+                // 좋은 자세 달성!
+                if (_goodPoseStartTime == null) {
+                  // 처음 달성한 경우 타이머 시작
+                  _goodPoseStartTime = DateTime.now();
+                  _statusMessage = '좋아요! 3초간 유지하세요... (${(similarity * 100).toStringAsFixed(1)}%)';
+                  debugPrint('[Reminder] Good pose started, timer begins');
+                } else {
+                  // 이미 타이머가 시작된 경우 경과 시간 확인
+                  final elapsed = DateTime.now().difference(_goodPoseStartTime!);
+                  final remaining = _requiredHoldDuration - elapsed;
+                  
+                  if (remaining.inMilliseconds <= 0) {
+                    // 3초 달성!
+                    _statusMessage = '완벽합니다! (${(similarity * 100).toStringAsFixed(1)}%)';
+                    debugPrint('[Reminder] Held for 3 seconds, closing');
+                    _closeWithDelay();
+                  } else {
+                    // 아직 3초 미만
+                    final remainingSeconds = (remaining.inMilliseconds / 1000).ceil();
+                    _statusMessage = '좋아요! ${remainingSeconds}초 더 유지... (${(similarity * 100).toStringAsFixed(1)}%)';
+                  }
+                }
               } else {
-                _statusMessage = '자세를 맞춰주세요 (${(similarity * 100).toStringAsFixed(1)}%)';
+                // 유사도가 50% 미만으로 떨어짐 - 타이머 리셋
+                if (_goodPoseStartTime != null) {
+                  debugPrint('[Reminder] Pose lost, timer reset');
+                  _goodPoseStartTime = null;
+                }
+                
+                if (similarity >= 0.35) {
+                  _statusMessage = '조금만 더! (${(similarity * 100).toStringAsFixed(1)}%)';
+                } else {
+                  _statusMessage = '자세를 맞춰주세요 (${(similarity * 100).toStringAsFixed(1)}%)';
+                }
               }
             });
           }
@@ -135,8 +175,9 @@ class _ReminderPageState extends State<ReminderPage> {
     
     _isClosing = true;
     _detectionTimer?.cancel();
+    _goodPoseStartTime = null; // 타이머 정리
     
-    Future.delayed(const Duration(seconds: 1), () {
+    Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
         Navigator.pop(context);
       }
