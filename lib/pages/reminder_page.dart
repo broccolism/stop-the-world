@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/pose_service.dart';
 import '../models/pose_data.dart';
+import '../models/reminder_type.dart';
 import '../widgets/camera_preview_widget.dart';
 
 class ReminderPage extends StatefulWidget {
@@ -14,19 +15,28 @@ class ReminderPage extends StatefulWidget {
 
 class _ReminderPageState extends State<ReminderPage> {
   final PoseService _poseService = PoseService();
+  ReminderType _reminderType = ReminderType.poseMatching;
+  
+  // 자세 매칭용 변수
   PoseData? _currentPose;
   PoseData? _referencePose;
   double? _similarity;
+  String? _snapshotPath;
+  double _cameraOpacity = 0.6;
+  DateTime? _goodPoseStartTime;
+  static const Duration _requiredHoldDuration = Duration(seconds: 3);
+  
+  // 깜빡임 감지용 변수
+  int _currentBlinkCount = 0;
+  int _targetBlinkCount = 10;
+  
+  // 공통 변수
   int? _textureId;
   bool _isInitialized = false;
   String _statusMessage = '카메라 초기화 중...';
   Timer? _detectionTimer;
   bool _hasReference = false;
-  String? _snapshotPath; // 기준 자세 스냅샷 경로
-  double _cameraOpacity = 0.6; // 카메라 투명도 (초기값 60%)
-  bool _isClosing = false; // 닫기 작업 중 플래그
-  DateTime? _goodPoseStartTime; // 좋은 자세를 유지하기 시작한 시간
-  static const Duration _requiredHoldDuration = Duration(seconds: 3); // 필요한 유지 시간
+  bool _isClosing = false;
 
   @override
   void initState() {
@@ -37,14 +47,26 @@ class _ReminderPageState extends State<ReminderPage> {
   Future<void> _initialize() async {
     debugPrint('[Reminder] Initialize started');
     
-    // 기준 자세 확인
+    // 리마인더 타입 로드
+    _reminderType = await _poseService.loadReminderType();
+    debugPrint('[Reminder] Reminder type: $_reminderType');
+    
+    if (_reminderType == ReminderType.poseMatching) {
+      await _initializePoseMatching();
+    } else {
+      await _initializeBlinkCount();
+    }
+  }
+  
+  Future<void> _initializePoseMatching() async {
     try {
-      debugPrint('[Reminder] Checking for reference pose...');
+      debugPrint('[Reminder] Initializing pose matching mode...');
+      
+      // 기준 자세 확인
       _hasReference = await _poseService.hasReferencePose();
       debugPrint('[Reminder] Has reference: $_hasReference');
       
       if (!_hasReference) {
-        // 기준 자세가 없으면 2초 후 자동으로 닫기
         setState(() {
           _statusMessage = '기준 자세가 설정되지 않았습니다\n2초 후 자동으로 닫힙니다';
         });
@@ -58,17 +80,14 @@ class _ReminderPageState extends State<ReminderPage> {
       }
 
       // 기준 자세 로드
-      debugPrint('[Reminder] Loading reference pose...');
       _referencePose = await _poseService.loadReferencePose();
       debugPrint('[Reminder] Reference pose loaded with ${_referencePose?.joints.length ?? 0} joints');
       
       // 스냅샷 경로 로드
-      debugPrint('[Reminder] Loading snapshot path...');
       _snapshotPath = await _poseService.loadSnapshotPath();
       debugPrint('[Reminder] Snapshot path: $_snapshotPath');
       
       // 카메라 시작
-      debugPrint('[Reminder] Starting camera...');
       final textureId = await _poseService.startCamera();
       debugPrint('[Reminder] Camera started with textureId: $textureId');
       
@@ -78,18 +97,49 @@ class _ReminderPageState extends State<ReminderPage> {
         _statusMessage = '기준 자세와 맞춰주세요';
       });
       
-      debugPrint('[Reminder] Starting detection loop...');
-      _startDetectionLoop();
-      debugPrint('[Reminder] Initialize completed successfully');
+      _startPoseDetectionLoop();
+      debugPrint('[Reminder] Pose matching initialized successfully');
     } catch (e) {
-      debugPrint('[Reminder] error while initilizing: $e');
+      debugPrint('[Reminder] Error initializing pose matching: $e');
+      setState(() {
+        _statusMessage = '초기화 실패: $e';
+      });
+    }
+  }
+  
+  Future<void> _initializeBlinkCount() async {
+    try {
+      debugPrint('[Reminder] Initializing blink count mode...');
+      
+      // 목표 깜빡임 횟수 로드
+      _targetBlinkCount = await _poseService.loadBlinkTargetCount();
+      debugPrint('[Reminder] Target blink count: $_targetBlinkCount');
+      
+      // 카메라 시작
+      final textureId = await _poseService.startCamera();
+      debugPrint('[Reminder] Camera started with textureId: $textureId');
+      
+      // 깜빡임 카운터 리셋
+      await _poseService.resetBlinkCount();
+      
+      setState(() {
+        _textureId = textureId;
+        _isInitialized = true;
+        _currentBlinkCount = 0;
+        _statusMessage = '눈을 깜빡이세요!';
+      });
+      
+      _startBlinkDetectionLoop();
+      debugPrint('[Reminder] Blink count initialized successfully');
+    } catch (e) {
+      debugPrint('[Reminder] Error initializing blink count: $e');
       setState(() {
         _statusMessage = '초기화 실패: $e';
       });
     }
   }
 
-  void _startDetectionLoop() {
+  void _startPoseDetectionLoop() {
     _detectionTimer = Timer.periodic(const Duration(milliseconds: 200), (timer) async {
       if (!mounted || _isClosing) return;
       
@@ -170,6 +220,32 @@ class _ReminderPageState extends State<ReminderPage> {
     });
   }
 
+  void _startBlinkDetectionLoop() {
+    _detectionTimer = Timer.periodic(const Duration(milliseconds: 200), (timer) async {
+      if (!mounted || _isClosing) return;
+      
+      try {
+        final blinkCount = await _poseService.detectBlink();
+        
+        if (mounted && !_isClosing) {
+          setState(() {
+            _currentBlinkCount = blinkCount;
+            
+            if (_currentBlinkCount >= _targetBlinkCount) {
+              _statusMessage = '완료! $_currentBlinkCount회 깜빡임';
+              debugPrint('[Reminder] Target blink count reached');
+              _closeWithDelay();
+            } else {
+              _statusMessage = '$_currentBlinkCount / $_targetBlinkCount회 깜빡임';
+            }
+          });
+        }
+      } catch (e) {
+        debugPrint('[Reminder] Blink detection error: $e');
+      }
+    });
+  }
+
   void _closeWithDelay() {
     if (_isClosing) return;
     
@@ -203,8 +279,15 @@ class _ReminderPageState extends State<ReminderPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
+      body: _reminderType == ReminderType.poseMatching
+          ? _buildPoseMatchingUI()
+          : _buildBlinkCountUI(),
+    );
+  }
+
+  Widget _buildPoseMatchingUI() {
+    return Stack(
+      children: [
           // 1. 기준 자세 이미지 배경 (전체 화면)
           if (_isInitialized && _snapshotPath != null && File(_snapshotPath!).existsSync())
             Positioned.fill(
@@ -360,7 +443,120 @@ class _ReminderPageState extends State<ReminderPage> {
               ),
             ),
         ],
-      ),
+    );
+  }
+
+  Widget _buildBlinkCountUI() {
+    return Stack(
+      children: [
+        // 초기화 중 화면
+        if (!_isInitialized)
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const CircularProgressIndicator(
+                  color: Colors.white,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  _statusMessage,
+                  style: const TextStyle(color: Colors.white),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        
+        // 카메라 프리뷰 (배경, 투명도 낮게)
+        if (_isInitialized && _textureId != null)
+          Opacity(
+            opacity: 0.3,
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Texture(textureId: _textureId!),
+              ),
+            ),
+          ),
+        
+        // 중앙 카운터
+        if (_isInitialized)
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.remove_red_eye,
+                  size: 80,
+                  color: Colors.white,
+                ),
+                const SizedBox(height: 32),
+                Text(
+                  '$_currentBlinkCount',
+                  style: const TextStyle(
+                    fontSize: 120,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 20.0,
+                        color: Colors.black,
+                        offset: Offset(0, 0),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '/ $_targetBlinkCount회',
+                  style: const TextStyle(
+                    fontSize: 32,
+                    color: Colors.white70,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 10.0,
+                        color: Colors.black,
+                        offset: Offset(0, 0),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 48),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withAlpha(179),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _statusMessage,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        
+        // 건너뛰기 버튼
+        if (_isInitialized)
+          Positioned(
+            top: 40,
+            right: 20,
+            child: ElevatedButton(
+              onPressed: _skip,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey.withAlpha(204),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('건너뛰기'),
+            ),
+          ),
+      ],
     );
   }
 

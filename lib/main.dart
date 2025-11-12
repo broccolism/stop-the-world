@@ -6,6 +6,7 @@ import 'package:window_manager/window_manager.dart';
 import 'pages/settings_page.dart';
 import 'pages/reminder_page.dart';
 import 'services/pose_service.dart';
+import 'models/reminder_type.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -63,6 +64,8 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _isReminderShowing = false;
   bool _isReminderRunning = false; // 리마인더 실행 중 여부
   final PoseService _poseService = PoseService();
+  ReminderType _reminderType = ReminderType.poseMatching; // 현재 선택된 리마인더 타입
+  int _reminderInterval = 300; // 리마인더 간격 (초, 기본값 5분)
 
   // TODO: 나중에 UI에서 편집 가능하게 변경 예정
   final List<String> _blockedApps = ['zoom.us']; // Zoom 앱
@@ -70,23 +73,43 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
+    _loadSettings();
     // 자동 시작 제거 - 사용자가 수동으로 시작해야 함
+  }
+  
+  Future<void> _loadSettings() async {
+    final type = await _poseService.loadReminderType();
+    var interval = await _poseService.loadReminderInterval();
+    
+    // 최소값 보장 (5분 = 300초)
+    if (interval < 300) {
+      interval = 300;
+      await _poseService.saveReminderInterval(interval);
+    }
+    
+    setState(() {
+      _reminderType = type;
+      _reminderInterval = interval;
+    });
   }
 
   // 리마인더 시작
   Future<void> _startReminder() async {
-    final hasReferencePose = await _hasReferencePose();
-    
-    if (!hasReferencePose) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('먼저 자세를 설정해주세요!'),
-            duration: Duration(seconds: 2),
-          ),
-        );
+    // 자세 매칭 타입일 경우에만 기준 자세 확인
+    if (_reminderType == ReminderType.poseMatching) {
+      final hasReferencePose = await _hasReferencePose();
+      
+      if (!hasReferencePose) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('먼저 자세를 설정해주세요!'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
       }
-      return;
     }
     
     if (_reminderTimer != null) {
@@ -137,15 +160,15 @@ class _MyHomePageState extends State<MyHomePage> {
     _scheduleNextReminder();
   }
   
-  // 다음 리마인더 예약 (20초 후)
+  // 다음 리마인더 예약
   void _scheduleNextReminder() {
     if (!_isReminderRunning) {
       debugPrint('[Reminder] Loop stopped, not scheduling next reminder');
       return;
     }
-    
-    debugPrint('[Reminder] Scheduling next reminder in 20 seconds...');
-    _reminderTimer = Timer(const Duration(seconds: 20), () async {
+
+    debugPrint('[Reminder] Scheduling next reminder in $_reminderInterval seconds...');
+    _reminderTimer = Timer(Duration(seconds: _reminderInterval), () async {
       if (!_isReminderRunning || _isReminderShowing) {
         debugPrint('[Reminder] Skipping reminder (running: $_isReminderRunning, showing: $_isReminderShowing)');
         _scheduleNextReminder(); // 다시 예약
@@ -338,23 +361,158 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                '올바른 자세를 유지하세요!',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
+              Text(
+                _reminderType.description,
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
               ),
-              const SizedBox(height: 30),
-              ElevatedButton.icon(
-                onPressed: _showSettings,
-                icon: const Icon(Icons.camera_alt),
-                label: const Text('자세 설정'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                  textStyle: const TextStyle(fontSize: 16),
+              const SizedBox(height: 20),
+              // 리마인더 타입 선택
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: DropdownButton<ReminderType>(
+                  value: _reminderType,
+                  underline: Container(),
+                  icon: const Icon(Icons.arrow_drop_down, color: Colors.deepPurple),
+                  dropdownColor: Colors.white,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepPurple,
+                  ),
+                  items: ReminderType.values.map((ReminderType type) {
+                    return DropdownMenuItem<ReminderType>(
+                      value: type,
+                      child: Row(
+                        children: [
+                          Icon(
+                            type == ReminderType.poseMatching
+                                ? Icons.accessibility_new
+                                : Icons.remove_red_eye,
+                            color: Colors.deepPurple,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(type.displayName),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (ReminderType? newValue) async {
+                    if (newValue != null) {
+                      setState(() {
+                        _reminderType = newValue;
+                      });
+                      await _poseService.saveReminderType(newValue);
+                    }
+                  },
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
+              // 리마인더 간격 설정
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.timer, color: Colors.grey, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              '리마인더 간격',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          '${(_reminderInterval / 60).round()}분',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.deepPurple,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SliderTheme(
+                      data: SliderThemeData(
+                        activeTrackColor: Colors.deepPurple,
+                        inactiveTrackColor: Colors.deepPurple.withOpacity(0.3),
+                        thumbColor: Colors.deepPurple,
+                        overlayColor: Colors.deepPurple.withOpacity(0.2),
+                        valueIndicatorColor: Colors.deepPurple,
+                        valueIndicatorTextStyle: const TextStyle(color: Colors.white),
+                      ),
+                      child: Slider(
+                        value: (_reminderInterval / 60).roundToDouble(),
+                        min: 5,
+                        max: 60,
+                        divisions: 11, // 5분 단위로 조절 (5, 10, 15, ..., 60)
+                        label: '${(_reminderInterval / 60).round()}분',
+                        onChanged: (double value) {
+                          setState(() {
+                            _reminderInterval = (value * 60).toInt(); // 분을 초로 변환
+                          });
+                        },
+                        onChangeEnd: (double value) async {
+                          final intervalSeconds = (value * 60).toInt(); // 분을 초로 변환하여 저장
+                          await _poseService.saveReminderInterval(intervalSeconds);
+                        },
+                      ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '5분',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        Text(
+                          '1시간',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              // 자세 설정 버튼 (자세 매칭 타입일 경우에만 표시)
+              if (_reminderType == ReminderType.poseMatching)
+                ElevatedButton.icon(
+                  onPressed: _showSettings,
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text('자세 설정'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                    textStyle: const TextStyle(fontSize: 16),
+                  ),
+                ),
+              if (_reminderType == ReminderType.poseMatching) const SizedBox(height: 16),
               // 리마인더 시작/일시중단 버튼
               ElevatedButton.icon(
                 onPressed: _isReminderRunning ? _pauseReminder : _startReminder,

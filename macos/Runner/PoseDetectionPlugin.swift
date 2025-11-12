@@ -7,6 +7,7 @@ import Vision
 public class PoseDetectionPlugin: NSObject, FlutterPlugin {
     private var cameraManager: CameraManager?
     private var poseDetector: PoseDetector?
+    private var blinkDetector: BlinkDetector?
     private var channel: FlutterMethodChannel?
     private var videoTexture: VideoTexture?
     private var textureRegistry: FlutterTextureRegistry?
@@ -57,6 +58,12 @@ public class PoseDetectionPlugin: NSObject, FlutterPlugin {
             captureSnapshot(result: result)
         case "loadSnapshotPath":
             loadSnapshotPath(result: result)
+        case "detectBlink":
+            detectBlink(result: result)
+        case "resetBlinkCount":
+            resetBlinkCount(result: result)
+        case "getBlinkCount":
+            getBlinkCount(result: result)
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -73,6 +80,7 @@ public class PoseDetectionPlugin: NSObject, FlutterPlugin {
         if cameraManager == nil {
             cameraManager = CameraManager()
             poseDetector = PoseDetector()
+            blinkDetector = BlinkDetector()
         }
         
         // VideoTexture 생성
@@ -252,6 +260,53 @@ public class PoseDetectionPlugin: NSObject, FlutterPlugin {
         } else {
             result(nil)
         }
+    }
+    
+    // MARK: - Blink Detection Methods
+    
+    private func detectBlink(result: @escaping FlutterResult) {
+        guard let cameraManager = cameraManager,
+              let blinkDetector = blinkDetector else {
+            result(FlutterError(code: "NOT_INITIALIZED",
+                              message: "Camera or blink detector not started",
+                              details: nil))
+            return
+        }
+        
+        cameraManager.captureFrame { pixelBuffer in
+            guard let pixelBuffer = pixelBuffer else {
+                result(0)
+                return
+            }
+            
+            blinkDetector.detectBlink(in: pixelBuffer) { blinkCount in
+                result(blinkCount)
+            }
+        }
+    }
+    
+    private func resetBlinkCount(result: @escaping FlutterResult) {
+        guard let blinkDetector = blinkDetector else {
+            result(FlutterError(code: "NOT_INITIALIZED",
+                              message: "Blink detector not initialized",
+                              details: nil))
+            return
+        }
+        
+        blinkDetector.resetBlinkCount()
+        result(nil)
+    }
+    
+    private func getBlinkCount(result: @escaping FlutterResult) {
+        guard let blinkDetector = blinkDetector else {
+            result(FlutterError(code: "NOT_INITIALIZED",
+                              message: "Blink detector not initialized",
+                              details: nil))
+            return
+        }
+        
+        let count = blinkDetector.getBlinkCount()
+        result(count)
     }
 }
 

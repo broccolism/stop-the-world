@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/pose_data.dart';
+import '../models/reminder_type.dart';
 
 class PoseService {
   static const platform = MethodChannel('pose_detection');
@@ -111,6 +113,67 @@ class PoseService {
     } on PlatformException catch (e) {
       throw Exception('Failed to load snapshot path: ${e.message}');
     }
+  }
+
+  // MARK: - Blink Detection Methods
+
+  Future<int> detectBlink() async {
+    try {
+      final result = await platform.invokeMethod('detectBlink');
+      return result as int;
+    } on PlatformException catch (e) {
+      throw Exception('Failed to detect blink: ${e.message}');
+    }
+  }
+
+  Future<void> resetBlinkCount() async {
+    try {
+      await platform.invokeMethod('resetBlinkCount');
+    } on PlatformException catch (e) {
+      throw Exception('Failed to reset blink count: ${e.message}');
+    }
+  }
+
+  Future<int> getBlinkCount() async {
+    try {
+      final result = await platform.invokeMethod('getBlinkCount');
+      return result as int;
+    } on PlatformException catch (e) {
+      throw Exception('Failed to get blink count: ${e.message}');
+    }
+  }
+
+  // MARK: - Reminder Type Management
+
+  Future<void> saveReminderType(ReminderType type) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('reminder_type', type.tostring());
+  }
+
+  Future<ReminderType> loadReminderType() async {
+    final prefs = await SharedPreferences.getInstance();
+    final typeString = prefs.getString('reminder_type') ?? 'poseMatching';
+    return ReminderTypeExtension.fromString(typeString);
+  }
+
+  Future<void> saveBlinkTargetCount(int count) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('blink_target_count', count);
+  }
+
+  Future<int> loadBlinkTargetCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('blink_target_count') ?? 10;
+  }
+
+  Future<void> saveReminderInterval(int seconds) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('reminder_interval_seconds', seconds);
+  }
+
+  Future<int> loadReminderInterval() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('reminder_interval_seconds') ?? 300; // 기본값 300초(5분)
   }
 }
 

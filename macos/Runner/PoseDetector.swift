@@ -163,3 +163,114 @@ class PoseDetector {
     }
 }
 
+// MARK: - Blink Detector
+
+@available(macOS 11.0, *)
+class BlinkDetector {
+    private let visionQueue = DispatchQueue(label: "blinkDetectionQueue")
+    private var blinkCount: Int = 0
+    private var previousEAR: Double = 1.0 // 초기값: 눈 뜨고 있음
+    private var isEyeClosed: Bool = false
+    private let earThreshold: Double = 0.2 // EAR 임계값
+    
+    func detectBlink(in pixelBuffer: CVPixelBuffer, completion: @escaping (Int) -> Void) {
+        visionQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            let request = VNDetectFaceLandmarksRequest()
+            
+            let handler = VNImageRequestHandler(
+                cvPixelBuffer: pixelBuffer,
+                orientation: .up,
+                options: [:]
+            )
+            
+            do {
+                try handler.perform([request])
+                
+                guard let observation = request.results?.first,
+                      let landmarks = observation.landmarks,
+                      let leftEye = landmarks.leftEye,
+                      let rightEye = landmarks.rightEye else {
+                    DispatchQueue.main.async {
+                        completion(self.blinkCount)
+                    }
+                    return
+                }
+                
+                // 양쪽 눈의 EAR 계산
+                let leftEAR = self.calculateEAR(for: leftEye)
+                let rightEAR = self.calculateEAR(for: rightEye)
+                let averageEAR = (leftEAR + rightEAR) / 2.0
+                
+                // 깜빡임 감지 로직
+                if averageEAR < self.earThreshold && self.previousEAR >= self.earThreshold {
+                    // 눈을 감기 시작
+                    self.isEyeClosed = true
+                    NSLog("[BlinkDetector] Eye closed, EAR: %.3f", averageEAR)
+                }
+                
+                if averageEAR >= self.earThreshold && self.previousEAR < self.earThreshold && self.isEyeClosed {
+                    // 눈을 다시 뜸 - 깜빡임 1회 카운트
+                    self.blinkCount += 1
+                    self.isEyeClosed = false
+                    NSLog("[BlinkDetector] Blink detected! Total count: %d, EAR: %.3f", self.blinkCount, averageEAR)
+                }
+                
+                self.previousEAR = averageEAR
+                
+                DispatchQueue.main.async {
+                    completion(self.blinkCount)
+                }
+                
+            } catch {
+                NSLog("[BlinkDetector] Face landmark detection error: %@", error.localizedDescription)
+                DispatchQueue.main.async {
+                    completion(self.blinkCount)
+                }
+            }
+        }
+    }
+    
+    private func calculateEAR(for eye: VNFaceLandmarkRegion2D) -> Double {
+        let points = eye.normalizedPoints
+        
+        // 최소 6개 포인트 필요
+        guard points.count >= 6 else {
+            return 1.0 // 기본값 (눈 뜨고 있음)
+        }
+        
+        // EAR 계산: (|p2-p6| + |p3-p5|) / (2 * |p1-p4|)
+        // 눈의 세로 거리 2개와 가로 거리 1개 사용
+        
+        // 간단한 근사: 상하 거리 / 좌우 거리
+        let verticalDistance1 = distance(points[1], points[5])
+        let verticalDistance2 = distance(points[2], points[4])
+        let horizontalDistance = distance(points[0], points[3])
+        
+        guard horizontalDistance > 0 else {
+            return 1.0
+        }
+        
+        let ear = (verticalDistance1 + verticalDistance2) / (2.0 * horizontalDistance)
+        return ear
+    }
+    
+    private func distance(_ p1: CGPoint, _ p2: CGPoint) -> Double {
+        let dx = p1.x - p2.x
+        let dy = p1.y - p2.y
+        return sqrt(Double(dx * dx + dy * dy))
+    }
+    
+    func resetBlinkCount() {
+        blinkCount = 0
+        previousEAR = 1.0
+        isEyeClosed = false
+        NSLog("[BlinkDetector] Blink count reset")
+    }
+    
+    func getBlinkCount() -> Int {
+        return blinkCount
+    }
+}
+
