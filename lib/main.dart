@@ -12,9 +12,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
 
-  // 메인 앱용 옵션
+  // 메인 앱용 옵션 - 화면 전체 높이 사용 (매우 큰 값을 주면 자동으로 최대 높이로 조절됨)
   WindowOptions windowOptions = const WindowOptions(
-    size: Size(500, 480),
+    size: Size(500, 10000),
     center: true,
     titleBarStyle: TitleBarStyle.hidden,
     skipTaskbar: false,
@@ -367,135 +367,171 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               const SizedBox(height: 20),
               // 리마인더 타입 선택
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.deepPurple.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: DropdownButton<ReminderType>(
-                  value: _reminderType,
-                  underline: Container(),
-                  icon: const Icon(Icons.arrow_drop_down, color: Colors.deepPurple),
-                  dropdownColor: Colors.white,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple,
+              Opacity(
+                opacity: _isReminderRunning ? 0.5 : 1.0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  items: ReminderType.values.map((ReminderType type) {
-                    return DropdownMenuItem<ReminderType>(
-                      value: type,
-                      child: Row(
-                        children: [
-                          Icon(
-                            type == ReminderType.poseMatching
-                                ? Icons.accessibility_new
-                                : Icons.remove_red_eye,
-                            color: Colors.deepPurple,
-                            size: 20,
+                  child: DropdownButton<ReminderType>(
+                    value: _reminderType,
+                    underline: Container(),
+                    icon: Icon(
+                      Icons.arrow_drop_down,
+                      color: _isReminderRunning ? Colors.grey : Colors.deepPurple,
+                    ),
+                    dropdownColor: Colors.white,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: _isReminderRunning ? Colors.grey : Colors.deepPurple,
+                    ),
+                    disabledHint: Row(
+                      children: [
+                        Icon(
+                          _reminderType == ReminderType.poseMatching
+                              ? Icons.accessibility_new
+                              : Icons.remove_red_eye,
+                          color: Colors.grey,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _reminderType.displayName,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
                           ),
-                          const SizedBox(width: 8),
-                          Text(type.displayName),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (ReminderType? newValue) async {
-                    if (newValue != null) {
-                      setState(() {
-                        _reminderType = newValue;
-                      });
-                      await _poseService.saveReminderType(newValue);
-                    }
-                  },
+                        ),
+                      ],
+                    ),
+                    items: ReminderType.values.map((ReminderType type) {
+                      return DropdownMenuItem<ReminderType>(
+                        value: type,
+                        child: Row(
+                          children: [
+                            Icon(
+                              type == ReminderType.poseMatching
+                                  ? Icons.accessibility_new
+                                  : Icons.remove_red_eye,
+                              color: Colors.deepPurple,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(type.displayName),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: _isReminderRunning ? null : (ReminderType? newValue) async {
+                      if (newValue != null) {
+                        setState(() {
+                          _reminderType = newValue;
+                        });
+                        await _poseService.saveReminderType(newValue);
+                      }
+                    },
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
               // 리마인더 간격 설정
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.timer, color: Colors.grey, size: 20),
-                            SizedBox(width: 8),
-                            Text(
-                              '리마인더 간격',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey,
+              Opacity(
+                opacity: _isReminderRunning ? 0.5 : 1.0,
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.timer, color: Colors.grey, size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                '리마인더 간격',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey,
+                                ),
                               ),
+                            ],
+                          ),
+                          Text(
+                            '${(_reminderInterval / 60).round()}분',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: _isReminderRunning ? Colors.grey : Colors.deepPurple,
                             ),
-                          ],
-                        ),
-                        Text(
-                          '${(_reminderInterval / 60).round()}분',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.deepPurple,
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    SliderTheme(
-                      data: SliderThemeData(
-                        activeTrackColor: Colors.deepPurple,
-                        inactiveTrackColor: Colors.deepPurple.withOpacity(0.3),
-                        thumbColor: Colors.deepPurple,
-                        overlayColor: Colors.deepPurple.withOpacity(0.2),
-                        valueIndicatorColor: Colors.deepPurple,
-                        valueIndicatorTextStyle: const TextStyle(color: Colors.white),
+                        ],
                       ),
-                      child: Slider(
-                        value: (_reminderInterval / 60).roundToDouble(),
-                        min: 5,
-                        max: 60,
-                        divisions: 11, // 5분 단위로 조절 (5, 10, 15, ..., 60)
-                        label: '${(_reminderInterval / 60).round()}분',
-                        onChanged: (double value) {
-                          setState(() {
-                            _reminderInterval = (value * 60).toInt(); // 분을 초로 변환
-                          });
-                        },
-                        onChangeEnd: (double value) async {
-                          final intervalSeconds = (value * 60).toInt(); // 분을 초로 변환하여 저장
-                          await _poseService.saveReminderInterval(intervalSeconds);
-                        },
+                      const SizedBox(height: 12),
+                      SliderTheme(
+                        data: SliderThemeData(
+                          activeTrackColor: _isReminderRunning ? Colors.grey : Colors.deepPurple,
+                          inactiveTrackColor: _isReminderRunning 
+                              ? Colors.grey.withOpacity(0.3) 
+                              : Colors.deepPurple.withOpacity(0.3),
+                          thumbColor: _isReminderRunning ? Colors.grey : Colors.deepPurple,
+                          overlayColor: _isReminderRunning 
+                              ? Colors.grey.withOpacity(0.2) 
+                              : Colors.deepPurple.withOpacity(0.2),
+                          valueIndicatorColor: _isReminderRunning ? Colors.grey : Colors.deepPurple,
+                          valueIndicatorTextStyle: const TextStyle(color: Colors.white),
+                          disabledActiveTrackColor: Colors.grey,
+                          disabledInactiveTrackColor: Colors.grey.withOpacity(0.3),
+                          disabledThumbColor: Colors.grey,
+                        ),
+                        child: Slider(
+                          value: (_reminderInterval / 60).roundToDouble(),
+                          min: 5,
+                          max: 60,
+                          divisions: 11, // 5분 단위로 조절 (5, 10, 15, ..., 60)
+                          label: '${(_reminderInterval / 60).round()}분',
+                          onChanged: _isReminderRunning ? null : (double value) {
+                            setState(() {
+                              _reminderInterval = (value * 60).toInt(); // 분을 초로 변환
+                            });
+                          },
+                          onChangeEnd: _isReminderRunning ? null : (double value) async {
+                            final intervalSeconds = (value * 60).toInt(); // 분을 초로 변환하여 저장
+                            await _poseService.saveReminderInterval(intervalSeconds);
+                          },
+                        ),
                       ),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '5분',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '5분',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
                           ),
-                        ),
-                        Text(
-                          '1시간',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
+                          Text(
+                            '1시간',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
