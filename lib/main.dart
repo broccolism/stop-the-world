@@ -61,12 +61,14 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   Timer? _reminderTimer;
+  Timer? _countdownTimer; // 카운트다운 표시용 타이머
   bool _isReminderShowing = false;
   bool _isReminderRunning = false; // 리마인더 실행 중 여부
   final PoseService _poseService = PoseService();
   ReminderType _reminderType = ReminderType.poseMatching; // 현재 선택된 리마인더 타입
   int _reminderInterval = 300; // 리마인더 간격 (초, 기본값 5분)
   bool _hasDndSchedule = false; // DND 스케줄 설정 여부
+  int _remainingSeconds = 0; // 다음 리마인더까지 남은 시간 (초)
 
   // TODO: 나중에 UI에서 편집 가능하게 변경 예정
   final List<String> _blockedApps = ['zoom.us']; // Zoom 앱
@@ -76,6 +78,13 @@ class _MyHomePageState extends State<MyHomePage> {
     super.initState();
     _loadSettings();
     // 자동 시작 제거 - 사용자가 수동으로 시작해야 함
+  }
+
+  @override
+  void dispose() {
+    _reminderTimer?.cancel();
+    _countdownTimer?.cancel();
+    super.dispose();
   }
   
   Future<void> _loadSettings() async {
@@ -93,6 +102,41 @@ class _MyHomePageState extends State<MyHomePage> {
       _reminderType = type;
       _reminderInterval = interval;
       _hasDndSchedule = hasDnd;
+    });
+  }
+
+  // 시간 포맷팅 (초 -> MM:SS)
+  String _formatTime(int seconds) {
+    final minutes = seconds ~/ 60;
+    final remainingSeconds = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+
+  // 카운트다운 타이머 시작
+  void _startCountdown() {
+    _remainingSeconds = _reminderInterval;
+    
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_remainingSeconds > 0) {
+        setState(() {
+          _remainingSeconds--;
+        });
+      } else {
+        // 0에 도달하면 다시 리셋 (다음 주기 시작)
+        setState(() {
+          _remainingSeconds = _reminderInterval;
+        });
+      }
+    });
+  }
+  
+  // 카운트다운 타이머 중지
+  void _stopCountdown() {
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+    setState(() {
+      _remainingSeconds = 0;
     });
   }
 
@@ -124,6 +168,9 @@ class _MyHomePageState extends State<MyHomePage> {
       _isReminderRunning = true;
     });
     
+    // 카운트다운 시작
+    _startCountdown();
+    
     debugPrint('[Reminder] Starting reminder loop');
     _startReminderLoop();
   }
@@ -132,6 +179,9 @@ class _MyHomePageState extends State<MyHomePage> {
   void _pauseReminder() {
     _reminderTimer?.cancel();
     _reminderTimer = null;
+    
+    // 카운트다운 중지
+    _stopCountdown();
     
     setState(() {
       _isReminderRunning = false;
@@ -310,12 +360,6 @@ class _MyHomePageState extends State<MyHomePage> {
     } finally {
       _isReminderShowing = false;
     }
-  }
-
-  @override
-  void dispose() {
-    _reminderTimer?.cancel();
-    super.dispose();
   }
 
   @override
@@ -614,6 +658,82 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                 ),
               if (_reminderType == ReminderType.poseMatching) const SizedBox(height: 16),
+              // 리마인더 타이머 진행 상황 (실행 중일 때만 표시)
+              if (_isReminderRunning)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.deepPurple.withOpacity(0.1),
+                          Colors.blue.withOpacity(0.1),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.deepPurple.withOpacity(0.3),
+                        width: 2,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.timer,
+                              color: Colors.deepPurple,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              '다음 리마인더까지',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _formatTime(_remainingSeconds),
+                          style: const TextStyle(
+                            fontSize: 48,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.deepPurple,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: LinearProgressIndicator(
+                            value: _remainingSeconds / _reminderInterval,
+                            backgroundColor: Colors.grey.withOpacity(0.2),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.deepPurple,
+                            ),
+                            minHeight: 8,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${((_remainingSeconds / _reminderInterval) * 100).toStringAsFixed(0)}% 남음',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               // 리마인더 시작/일시중단 버튼
               ElevatedButton.icon(
                 onPressed: _isReminderRunning ? _pauseReminder : _startReminder,
