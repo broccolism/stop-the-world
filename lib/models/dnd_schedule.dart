@@ -78,6 +78,23 @@ class DndSchedule {
     return false;
   }
 
+  // 아직 남은 DND 시간대가 있는지 확인 (현재 시간 이후)
+  bool hasRemainingTime() {
+    if (!isToday()) return false;
+
+    final now = DateTime.now();
+    final currentMinutes = now.hour * 60 + now.minute;
+
+    // 현재 시간 이후에 시작하거나 진행 중인 시간대가 있는지 확인
+    for (final range in timeRanges) {
+      if (currentMinutes < range.endMinutes) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   // 48개 슬롯 (30분 단위) 배열을 시간 범위로 변환
   static List<DndTimeRange> slotsToTimeRanges(List<bool> slots) {
     final List<DndTimeRange> ranges = [];

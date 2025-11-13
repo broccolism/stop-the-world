@@ -44,21 +44,38 @@ class _DndPageState extends State<DndPage> {
 
   Future<void> _saveSchedule() async {
     final timeRanges = DndSchedule.slotsToTimeRanges(_selectedSlots);
-    final schedule = DndSchedule(
-      date: _today,
-      timeRanges: timeRanges,
-    );
     
-    await _poseService.saveDndSchedule(schedule);
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('방해 금지 시간이 저장되었습니다'),
-          duration: Duration(seconds: 2),
-        ),
+    if (timeRanges.isEmpty) {
+      // 시간 범위가 비어있으면 스케줄 삭제
+      await _poseService.clearDndSchedule();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('방해 금지 시간이 해제되었습니다'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } else {
+      // 시간 범위가 있으면 저장
+      final schedule = DndSchedule(
+        date: _today,
+        timeRanges: timeRanges,
       );
-      Navigator.pop(context);
+      
+      await _poseService.saveDndSchedule(schedule);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('방해 금지 시간이 저장되었습니다'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        Navigator.pop(context);
+      }
     }
   }
 

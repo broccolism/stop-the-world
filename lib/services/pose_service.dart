@@ -202,6 +202,12 @@ class PoseService {
         return null;
       }
       
+      // 모든 DND 시간이 경과했으면 null 반환 (자동으로 만료된 것으로 처리)
+      if (!schedule.hasRemainingTime()) {
+        await clearDndSchedule();
+        return null;
+      }
+      
       return schedule;
     } catch (e) {
       // 파싱 오류 시 null 반환
@@ -222,7 +228,29 @@ class PoseService {
 
   Future<bool> hasDndScheduleToday() async {
     final schedule = await loadDndSchedule();
-    return schedule != null && schedule.isToday();
+    if (schedule == null || !schedule.isToday() || schedule.timeRanges.isEmpty) {
+      return false;
+    }
+    
+    // 모든 DND 시간이 경과했으면 스케줄 삭제하고 false 반환
+    if (!schedule.hasRemainingTime()) {
+      await clearDndSchedule();
+      return false;
+    }
+    
+    return true;
+  }
+
+  // MARK: - Blocked Apps Management
+
+  Future<void> saveBlockedApps(List<String> apps) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('blocked_apps', apps);
+  }
+
+  Future<List<String>> loadBlockedApps() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList('blocked_apps') ?? ['zoom.us']; // 기본값: Zoom
   }
 }
 

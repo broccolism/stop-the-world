@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'pages/settings_page.dart';
 import 'pages/reminder_page.dart';
 import 'pages/dnd_page.dart';
+import 'pages/blacklist_page.dart';
 import 'services/pose_service.dart';
 import 'models/reminder_type.dart';
+import 'widgets/circular_timer_ring.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -70,9 +73,6 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _hasDndSchedule = false; // DND 스케줄 설정 여부
   int _remainingSeconds = 0; // 다음 리마인더까지 남은 시간 (초)
 
-  // TODO: 나중에 UI에서 편집 가능하게 변경 예정
-  final List<String> _blockedApps = ['zoom.us']; // Zoom 앱
-
   @override
   void initState() {
     super.initState();
@@ -92,9 +92,9 @@ class _MyHomePageState extends State<MyHomePage> {
     var interval = await _poseService.loadReminderInterval();
     final hasDnd = await _poseService.hasDndScheduleToday();
     
-    // 최소값 보장 (5분 = 300초)
-    if (interval < 300) {
-      interval = 300;
+    // 최소값 보장 (5초)
+    if (interval < 5) {
+      interval = 5;
       await _poseService.saveReminderInterval(interval);
     }
     
@@ -201,11 +201,32 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   // 블랙리스트 앱이 실행 중인지 확인
-  // 참고: Sandbox 모드에서는 프로세스 목록을 읽을 수 없으므로 이 기능은 비활성화됨
   Future<bool> _isBlockedAppRunning() async {
-    // Sandbox 모드에서는 ps 명령어 실행 불가
-    // 추후 NSWorkspace API를 사용하여 구현 가능
-    return false;
+    try {
+      final blockedApps = await _poseService.loadBlockedApps();
+      if (blockedApps.isEmpty) return false;
+
+      // ps 명령어로 실행 중인 프로세스 확인
+      final result = await Process.run('ps', ['-ax', '-o', 'comm']);
+      if (result.exitCode != 0) {
+        debugPrint('[Blacklist] Failed to get process list: ${result.stderr}');
+        return false;
+      }
+
+      final processes = result.stdout.toString().toLowerCase();
+      
+      for (final appName in blockedApps) {
+        if (processes.contains(appName.toLowerCase())) {
+          debugPrint('[Blacklist] Blocked app is running: $appName');
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (e) {
+      debugPrint('[Blacklist] Error checking blocked apps: $e');
+      return false;
+    }
   }
 
   // 리마인더 루프 시작 - 리마인더가 닫힌 후부터 다시 타이머 시작
@@ -296,6 +317,29 @@ class _MyHomePageState extends State<MyHomePage> {
     } catch (e, stackTrace) {
       debugPrint('[DND] Error: $e');
       debugPrint('[DND] Stack trace: $stackTrace');
+    }
+  }
+
+  // 블랙리스트 설정 페이지 표시
+  Future<void> _showBlacklistSettings() async {
+    if (!mounted) return;
+    
+    try {
+      debugPrint('[Blacklist] Showing blacklist settings page');
+      
+      // 블랙리스트 설정 페이지로 이동
+      if (mounted) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const BlacklistPage()),
+        );
+      }
+      
+      debugPrint('[Blacklist] Blacklist settings page closed');
+      
+    } catch (e, stackTrace) {
+      debugPrint('[Blacklist] Error: $e');
+      debugPrint('[Blacklist] Stack trace: $stackTrace');
     }
   }
 
@@ -393,377 +437,248 @@ class _MyHomePageState extends State<MyHomePage> {
                 minHeight: constraints.maxHeight,
               ),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: <Widget>[
-              const SizedBox(height: 20),
-              const Icon(
-                Icons.accessibility_new,
-                size: 60,
-                color: Colors.deepPurple,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Posture Reminder',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _reminderType.description,
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-              const SizedBox(height: 20),
-              // 리마인더 타입 선택
-              Opacity(
-                opacity: _isReminderRunning ? 0.5 : 1.0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.deepPurple.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: DropdownButton<ReminderType>(
-                    value: _reminderType,
-                    underline: Container(),
-                    icon: Icon(
-                      Icons.arrow_drop_down,
-                      color: _isReminderRunning ? Colors.grey : Colors.deepPurple,
-                    ),
-                    dropdownColor: Colors.white,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: _isReminderRunning ? Colors.grey : Colors.deepPurple,
-                    ),
-                    disabledHint: Row(
-                      children: [
-                        Icon(
-                          _reminderType == ReminderType.poseMatching
-                              ? Icons.accessibility_new
-                              : Icons.remove_red_eye,
-                          color: Colors.grey,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _reminderType.displayName,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                    items: ReminderType.values.map((ReminderType type) {
-                      return DropdownMenuItem<ReminderType>(
-                        value: type,
-                        child: Row(
-                          children: [
-                            Icon(
-                              type == ReminderType.poseMatching
-                                  ? Icons.accessibility_new
-                                  : Icons.remove_red_eye,
-                              color: Colors.deepPurple,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(type.displayName),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: _isReminderRunning ? null : (ReminderType? newValue) async {
-                      if (newValue != null) {
-                        setState(() {
-                          _reminderType = newValue;
-                        });
-                        await _poseService.saveReminderType(newValue);
-                      }
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              // 리마인더 간격 설정
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Opacity(
-                  opacity: _isReminderRunning ? 0.5 : 1.0,
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                    ),
-                  child: Column(
+                  // 상단: 타이틀 + 리마인더 타입
+                  Column(
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.timer, color: Colors.grey, size: 20),
-                              SizedBox(width: 8),
-                              Text(
-                                '리마인더 간격',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            '${(_reminderInterval / 60).round()}분',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: _isReminderRunning ? Colors.grey : Colors.deepPurple,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      SliderTheme(
-                        data: SliderThemeData(
-                          activeTrackColor: _isReminderRunning ? Colors.grey : Colors.deepPurple,
-                          inactiveTrackColor: _isReminderRunning 
-                              ? Colors.grey.withOpacity(0.3) 
-                              : Colors.deepPurple.withOpacity(0.3),
-                          thumbColor: _isReminderRunning ? Colors.grey : Colors.deepPurple,
-                          overlayColor: _isReminderRunning 
-                              ? Colors.grey.withOpacity(0.2) 
-                              : Colors.deepPurple.withOpacity(0.2),
-                          valueIndicatorColor: _isReminderRunning ? Colors.grey : Colors.deepPurple,
-                          valueIndicatorTextStyle: const TextStyle(color: Colors.white),
-                          disabledActiveTrackColor: Colors.grey,
-                          disabledInactiveTrackColor: Colors.grey.withOpacity(0.3),
-                          disabledThumbColor: Colors.grey,
-                        ),
-                        child: Slider(
-                          value: (_reminderInterval / 60).roundToDouble(),
-                          min: 5,
-                          max: 60,
-                          divisions: 11, // 5분 단위로 조절 (5, 10, 15, ..., 60)
-                          label: '${(_reminderInterval / 60).round()}분',
-                          onChanged: _isReminderRunning ? null : (double value) {
-                            setState(() {
-                              _reminderInterval = (value * 60).toInt(); // 분을 초로 변환
-                            });
-                          },
-                          onChangeEnd: _isReminderRunning ? null : (double value) async {
-                            final intervalSeconds = (value * 60).toInt(); // 분을 초로 변환하여 저장
-                            await _poseService.saveReminderInterval(intervalSeconds);
-                          },
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Posture Reminder',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.deepPurple,
                         ),
                       ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '5분',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                          Text(
-                            '1시간',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 8),
+                      Text(
+                        _reminderType.description,
+                        style: const TextStyle(fontSize: 14, color: Colors.grey),
                       ),
                     ],
                   ),
-                ),
-              ),
-            ),
-              const SizedBox(height: 20),
-              // 방해 금지 모드 버튼
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _showDndSettings,
-                        icon: Icon(
-                          _hasDndSchedule
-                              ? Icons.do_not_disturb_on
-                              : Icons.do_not_disturb_off,
-                        ),
-                        label: Text(
-                          _hasDndSchedule
-                              ? '방해 금지 모드 (설정됨)'
-                              : '방해 금지 모드 설정',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _hasDndSchedule
-                              ? Colors.orange
-                              : Colors.grey,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 14),
-                        ),
-                      ),
-                    ),
-                    if (_hasDndSchedule)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: FutureBuilder(
-                          future: _poseService.loadDndSchedule(),
-                          builder: (context, snapshot) {
-                            if (snapshot.hasData && snapshot.data != null) {
-                              final schedule = snapshot.data!;
-                              final summary = schedule.timeRanges
-                                  .map((r) => r.displayText)
-                                  .join(', ');
-                              return Text(
-                                summary,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                                textAlign: TextAlign.center,
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              // 자세 설정 버튼 (자세 매칭 타입일 경우에만 표시)
-              if (_reminderType == ReminderType.poseMatching)
-                ElevatedButton.icon(
-                  onPressed: _showSettings,
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text('자세 설정', style: TextStyle(fontSize: 16)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                  
+                  // 중앙: 원형 타이머 링
+                  CircularTimerRing(
+                    isRunning: _isReminderRunning,
+                    intervalSeconds: _reminderInterval,
+                    remainingSeconds: _remainingSeconds,
+                    onIntervalChanged: (int newInterval) async {
+                      setState(() {
+                        _reminderInterval = newInterval;
+                      });
+                      await _poseService.saveReminderInterval(newInterval);
+                    },
+                    onStartStop: () {
+                      if (_isReminderRunning) {
+                        _pauseReminder();
+                      } else {
+                        _startReminder();
+                      }
+                    },
                   ),
-                ),
-              if (_reminderType == ReminderType.poseMatching) const SizedBox(height: 16),
-              // 리마인더 타이머 진행 상황 (실행 중일 때만 표시)
-              if (_isReminderRunning)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.deepPurple.withOpacity(0.1),
-                          Colors.blue.withOpacity(0.1),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: Colors.deepPurple.withOpacity(0.3),
-                        width: 2,
-                      ),
-                    ),
+                  
+                  // 하단: 버튼들
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
                     child: Column(
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.timer,
-                              color: Colors.deepPurple,
-                              size: 24,
+                        // 리마인더 타입 선택
+                        Opacity(
+                          opacity: _isReminderRunning ? 0.5 : 1.0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.deepPurple.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              '다음 리마인더까지',
+                            child: DropdownButton<ReminderType>(
+                              value: _reminderType,
+                              underline: Container(),
+                              isExpanded: true,
+                              icon: Icon(
+                                Icons.arrow_drop_down,
+                                color: _isReminderRunning ? Colors.grey : Colors.deepPurple,
+                              ),
+                              dropdownColor: Colors.white,
                               style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: _isReminderRunning ? Colors.grey : Colors.deepPurple,
+                              ),
+                              disabledHint: Row(
+                                children: [
+                                  Icon(
+                                    _reminderType == ReminderType.poseMatching
+                                        ? Icons.accessibility_new
+                                        : Icons.remove_red_eye,
+                                    color: Colors.grey,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _reminderType.displayName,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              items: ReminderType.values.map((ReminderType type) {
+                                return DropdownMenuItem<ReminderType>(
+                                  value: type,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        type == ReminderType.poseMatching
+                                            ? Icons.accessibility_new
+                                            : Icons.remove_red_eye,
+                                        color: Colors.deepPurple,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(type.displayName),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: _isReminderRunning ? null : (ReminderType? newValue) async {
+                                if (newValue != null) {
+                                  setState(() {
+                                    _reminderType = newValue;
+                                  });
+                                  await _poseService.saveReminderType(newValue);
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 16),
+                        
+                        // 자세 설정 버튼 (자세 매칭 타입일 경우에만 표시)
+                        if (_reminderType == ReminderType.poseMatching)
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: _showSettings,
+                              icon: const Icon(Icons.camera_alt),
+                              label: const Text('자세 설정', style: TextStyle(fontSize: 16)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.deepPurple,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _formatTime(_remainingSeconds),
-                          style: const TextStyle(
-                            fontSize: 48,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.deepPurple,
-                            letterSpacing: 2,
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: LinearProgressIndicator(
-                            value: _remainingSeconds / _reminderInterval,
-                            backgroundColor: Colors.grey.withOpacity(0.2),
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.deepPurple,
+                        
+                        if (_reminderType == ReminderType.poseMatching)
+                          const SizedBox(height: 12),
+                        
+                        // 방해 금지 모드 버튼
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _showDndSettings,
+                            icon: Icon(
+                              _hasDndSchedule
+                                  ? Icons.do_not_disturb_on
+                                  : Icons.do_not_disturb_off,
                             ),
-                            minHeight: 8,
+                            label: Text(
+                              _hasDndSchedule
+                                  ? '방해 금지 모드 (설정됨)'
+                                  : '방해 금지 모드 설정',
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _hasDndSchedule
+                                  ? Colors.orange
+                                  : Colors.grey,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 14),
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${((_remainingSeconds / _reminderInterval) * 100).toStringAsFixed(0)}% 남음',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
+                        
+                        if (_hasDndSchedule)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: FutureBuilder(
+                              future: _poseService.loadDndSchedule(),
+                              builder: (context, snapshot) {
+                                if (snapshot.hasData && snapshot.data != null) {
+                                  final schedule = snapshot.data!;
+                                  if (schedule.timeRanges.isEmpty) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  final summary = schedule.timeRanges
+                                      .map((r) => r.displayText)
+                                      .join(', ');
+                                  return Text(
+                                    summary,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                          ),
+                        
+                        const SizedBox(height: 12),
+                        
+                        // 블랙리스트 앱 관리 버튼
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _showBlacklistSettings,
+                            icon: const Icon(Icons.block),
+                            label: const Text(
+                              '블랙리스트 앱 관리',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red[400],
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 14),
+                            ),
                           ),
                         ),
+                        
+                        const SizedBox(height: 12),
+                        
+                        // 종료 버튼
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              debugPrint('[App] Exiting...');
+                              _reminderTimer?.cancel();
+                              await windowManager.destroy();
+                            },
+                            icon: const Icon(Icons.exit_to_app),
+                            label: const Text('종료', style: TextStyle(fontSize: 16)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                            ),
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 20),
                       ],
                     ),
                   ),
-                ),
-              // 리마인더 시작/일시중단 버튼
-              ElevatedButton.icon(
-                onPressed: _isReminderRunning ? _pauseReminder : _startReminder,
-                icon: Icon(_isReminderRunning ? Icons.pause_circle : Icons.play_circle),
-                label: Text(
-                  _isReminderRunning ? '리마인더 일시중단' : '리마인더 시작',
-                  style: const TextStyle(fontSize: 16),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _isReminderRunning ? Colors.orange : Colors.green,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  debugPrint('[App] Exiting...');
-                  _reminderTimer?.cancel();
-                  await windowManager.destroy();
-                },
-                icon: const Icon(Icons.exit_to_app),
-                label: const Text('종료', style: TextStyle(fontSize: 16)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
-                ),
-              ),
-              const SizedBox(height: 20),
                 ],
               ),
             ),
