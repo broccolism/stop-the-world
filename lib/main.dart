@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 import 'pages/settings_page.dart';
 import 'pages/reminder_page.dart';
+import 'pages/dnd_page.dart';
 import 'services/pose_service.dart';
 import 'models/reminder_type.dart';
 
@@ -12,9 +12,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
 
-  // 메인 앱용 옵션 - 화면 전체 높이 사용 (매우 큰 값을 주면 자동으로 최대 높이로 조절됨)
+  // 기본 창 설정 - 적당한 크기로 시작
   WindowOptions windowOptions = const WindowOptions(
-    size: Size(500, 10000),
+    size: Size(600, 800),
     center: true,
     titleBarStyle: TitleBarStyle.hidden,
     skipTaskbar: false,
@@ -66,6 +66,7 @@ class _MyHomePageState extends State<MyHomePage> {
   final PoseService _poseService = PoseService();
   ReminderType _reminderType = ReminderType.poseMatching; // 현재 선택된 리마인더 타입
   int _reminderInterval = 300; // 리마인더 간격 (초, 기본값 5분)
+  bool _hasDndSchedule = false; // DND 스케줄 설정 여부
 
   // TODO: 나중에 UI에서 편집 가능하게 변경 예정
   final List<String> _blockedApps = ['zoom.us']; // Zoom 앱
@@ -80,6 +81,7 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<void> _loadSettings() async {
     final type = await _poseService.loadReminderType();
     var interval = await _poseService.loadReminderInterval();
+    final hasDnd = await _poseService.hasDndScheduleToday();
     
     // 최소값 보장 (5분 = 300초)
     if (interval < 300) {
@@ -90,6 +92,7 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       _reminderType = type;
       _reminderInterval = interval;
+      _hasDndSchedule = hasDnd;
     });
   }
 
@@ -175,6 +178,13 @@ class _MyHomePageState extends State<MyHomePage> {
         return;
       }
       
+      // DND 체크
+      if (await _poseService.isInDndPeriod()) {
+        debugPrint('[Reminder] In DND period, skipping reminder...');
+        _scheduleNextReminder(); // 다시 예약
+        return;
+      }
+      
       // 블랙리스트 앱 체크
       if (await _isBlockedAppRunning()) {
         debugPrint('[Reminder] Blocked app is running, skipping reminder...');
@@ -198,15 +208,6 @@ class _MyHomePageState extends State<MyHomePage> {
     try {
       debugPrint('[Settings] Showing settings page');
       
-      // 창 크기 변경 (설정 화면용)
-      try {
-        await windowManager.setSize(const Size(600, 800));
-        await Future.delayed(const Duration(milliseconds: 100));
-        await windowManager.center();
-      } catch (e) {
-        debugPrint('[Settings] Window resize error: $e');
-      }
-      
       // 설정 페이지로 이동
       if (mounted) {
         await Navigator.pushNamed(context, '/settings');
@@ -214,20 +215,37 @@ class _MyHomePageState extends State<MyHomePage> {
       
       debugPrint('[Settings] Settings page closed');
       
-      // 원래 창 크기로 복원
-      try {
-        await windowManager.setSize(const Size(500, 480));
-        await Future.delayed(const Duration(milliseconds: 100));
-        await windowManager.center();
-      } catch (e) {
-        debugPrint('[Settings] Window restore error: $e');
-      }
-      
       // 자세 설정 완료 후에도 자동 시작하지 않음 (사용자가 수동으로 시작)
       
     } catch (e, stackTrace) {
       debugPrint('[Settings] Error: $e');
       debugPrint('[Settings] Stack trace: $stackTrace');
+    }
+  }
+
+  // DND 설정 페이지 표시
+  Future<void> _showDndSettings() async {
+    if (!mounted) return;
+    
+    try {
+      debugPrint('[DND] Showing DND settings page');
+      
+      // DND 설정 페이지로 이동
+      if (mounted) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const DndPage()),
+        );
+      }
+      
+      debugPrint('[DND] DND settings page closed');
+      
+      // DND 설정 상태 새로고침
+      await _loadSettings();
+      
+    } catch (e, stackTrace) {
+      debugPrint('[DND] Error: $e');
+      debugPrint('[DND] Stack trace: $stackTrace');
     }
   }
 
@@ -246,15 +264,6 @@ class _MyHomePageState extends State<MyHomePage> {
     
     try {
       debugPrint('[Reminder] Starting window manager operations...');
-      
-      // 창 크기 변경 (리마인더 화면용)
-      try {
-        await windowManager.setSize(const Size(600, 800));
-        await Future.delayed(const Duration(milliseconds: 100));
-        await windowManager.center();
-      } catch (e) {
-        debugPrint('[Reminder] Window resize error: $e');
-      }
       
       // 최소화되어 있으면 복원
       try {
@@ -285,15 +294,6 @@ class _MyHomePageState extends State<MyHomePage> {
       }
       
       debugPrint('[Reminder] Reminder page closed');
-      
-      // 원래 창 크기로 복원
-      try {
-        await windowManager.setSize(const Size(500, 480));
-        await Future.delayed(const Duration(milliseconds: 100));
-        await windowManager.center();
-      } catch (e) {
-        debugPrint('[Reminder] Window restore size error: $e');
-      }
       
       // 최상단 해제 후 최소화
       try {
@@ -341,11 +341,16 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
         ],
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
               const SizedBox(height: 20),
               const Icon(
                 Icons.accessibility_new,
@@ -439,15 +444,17 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               const SizedBox(height: 20),
               // 리마인더 간격 설정
-              Opacity(
-                opacity: _isReminderRunning ? 0.5 : 1.0,
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                  ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Opacity(
+                  opacity: _isReminderRunning ? 0.5 : 1.0,
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                    ),
                   child: Column(
                     children: [
                       Row(
@@ -534,18 +541,76 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                 ),
               ),
+            ),
               const SizedBox(height: 20),
+              // 방해 금지 모드 버튼
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _showDndSettings,
+                        icon: Icon(
+                          _hasDndSchedule
+                              ? Icons.do_not_disturb_on
+                              : Icons.do_not_disturb_off,
+                        ),
+                        label: Text(
+                          _hasDndSchedule
+                              ? '방해 금지 모드 (설정됨)'
+                              : '방해 금지 모드 설정',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _hasDndSchedule
+                              ? Colors.orange
+                              : Colors.grey,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 14),
+                        ),
+                      ),
+                    ),
+                    if (_hasDndSchedule)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: FutureBuilder(
+                          future: _poseService.loadDndSchedule(),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData && snapshot.data != null) {
+                              final schedule = snapshot.data!;
+                              final summary = schedule.timeRanges
+                                  .map((r) => r.displayText)
+                                  .join(', ');
+                              return Text(
+                                summary,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                                textAlign: TextAlign.center,
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
               // 자세 설정 버튼 (자세 매칭 타입일 경우에만 표시)
               if (_reminderType == ReminderType.poseMatching)
                 ElevatedButton.icon(
                   onPressed: _showSettings,
                   icon: const Icon(Icons.camera_alt),
-                  label: const Text('자세 설정'),
+                  label: const Text('자세 설정', style: TextStyle(fontSize: 16)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.deepPurple,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                    textStyle: const TextStyle(fontSize: 16),
                   ),
                 ),
               if (_reminderType == ReminderType.poseMatching) const SizedBox(height: 16),
@@ -553,12 +618,14 @@ class _MyHomePageState extends State<MyHomePage> {
               ElevatedButton.icon(
                 onPressed: _isReminderRunning ? _pauseReminder : _startReminder,
                 icon: Icon(_isReminderRunning ? Icons.pause_circle : Icons.play_circle),
-                label: Text(_isReminderRunning ? '리마인더 일시중단' : '리마인더 시작'),
+                label: Text(
+                  _isReminderRunning ? '리마인더 일시중단' : '리마인더 시작',
+                  style: const TextStyle(fontSize: 16),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _isReminderRunning ? Colors.orange : Colors.green,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                  textStyle: const TextStyle(fontSize: 16),
                 ),
               ),
               const SizedBox(height: 16),
@@ -569,7 +636,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   await windowManager.destroy();
                 },
                 icon: const Icon(Icons.exit_to_app),
-                label: const Text('종료'),
+                label: const Text('종료', style: TextStyle(fontSize: 16)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
@@ -577,9 +644,11 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
               ),
               const SizedBox(height: 20),
-            ],
-          ),
-        ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

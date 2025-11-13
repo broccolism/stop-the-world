@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/pose_data.dart';
 import '../models/reminder_type.dart';
+import '../models/dnd_schedule.dart';
 
 class PoseService {
   static const platform = MethodChannel('pose_detection');
@@ -174,6 +176,53 @@ class PoseService {
   Future<int> loadReminderInterval() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt('reminder_interval_seconds') ?? 300; // 기본값 300초(5분)
+  }
+
+  // MARK: - DND Schedule Management
+
+  Future<void> saveDndSchedule(DndSchedule schedule) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = json.encode(schedule.toJson());
+    await prefs.setString('dnd_schedule', jsonString);
+  }
+
+  Future<DndSchedule?> loadDndSchedule() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString('dnd_schedule');
+    
+    if (jsonString == null) return null;
+    
+    try {
+      final jsonMap = json.decode(jsonString) as Map<String, dynamic>;
+      final schedule = DndSchedule.fromJson(jsonMap);
+      
+      // 오늘 날짜가 아니면 null 반환 (자동으로 만료된 것으로 처리)
+      if (!schedule.isToday()) {
+        await clearDndSchedule();
+        return null;
+      }
+      
+      return schedule;
+    } catch (e) {
+      // 파싱 오류 시 null 반환
+      return null;
+    }
+  }
+
+  Future<void> clearDndSchedule() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('dnd_schedule');
+  }
+
+  Future<bool> isInDndPeriod() async {
+    final schedule = await loadDndSchedule();
+    if (schedule == null) return false;
+    return schedule.isInDndPeriod();
+  }
+
+  Future<bool> hasDndScheduleToday() async {
+    final schedule = await loadDndSchedule();
+    return schedule != null && schedule.isToday();
   }
 }
 

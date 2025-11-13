@@ -188,7 +188,7 @@ class _ReminderPageState extends State<ReminderPage> {
                   } else {
                     // 아직 3초 미만
                     final remainingSeconds = (remaining.inMilliseconds / 1000).ceil();
-                    _statusMessage = '좋아요! ${remainingSeconds}초 더 유지... (${(similarity * 100).toStringAsFixed(1)}%)';
+                    _statusMessage = '좋아요! $remainingSeconds초 더 유지... (${(similarity * 100).toStringAsFixed(1)}%)';
                   }
                 }
               } else {
