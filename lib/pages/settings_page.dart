@@ -164,10 +164,18 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7F6),
       appBar: AppBar(
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
-        title: Text(_reminderType == ReminderType.poseMatching ? '자세 설정' : '눈 깜빡임 설정'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF757575)),
+        title: Text(
+          _reminderType == ReminderType.poseMatching ? '자세 설정' : '눈 깜빡임 설정',
+          style: const TextStyle(
+            color: Color(0xFF424242),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
       body: SafeArea(
         child: _reminderType == ReminderType.poseMatching
@@ -198,15 +206,23 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
         ),
         Container(
-          color: Colors.black87,
           padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              top: BorderSide(
+                color: Color(0xFFE0E0E0),
+                width: 1,
+              ),
+            ),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 _statusMessage,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: Color(0xFF757575),
                   fontSize: 14,
                 ),
                 textAlign: TextAlign.center,
@@ -219,12 +235,15 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: ElevatedButton.icon(
                   onPressed: _recordPose,
                   icon: const Icon(Icons.check_circle),
-                  label: const Text('자세 기록하기'),
+                  label: const Text(
+                    '자세 기록하기',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
+                    backgroundColor: const Color(0xFF5B8C85),  // 세이지 그린
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    elevation: 0,
                   ),
                 ),
               ),
@@ -245,14 +264,15 @@ class _SettingsPageState extends State<SettingsPage> {
             const Icon(
               Icons.remove_red_eye,
               size: 80,
-              color: Colors.deepPurple,
+              color: Color(0xFF5B8C85),  // 세이지 그린
             ),
             const SizedBox(height: 24),
             const Text(
               '눈 깜빡임 연습',
               style: TextStyle(
                 fontSize: 24,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF424242),
               ),
             ),
             const SizedBox(height: 16),
@@ -261,15 +281,19 @@ class _SettingsPageState extends State<SettingsPage> {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.grey,
+                color: Color(0xFF757575),
               ),
             ),
             const SizedBox(height: 32),
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.deepPurple.withOpacity(0.1),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFFE0E0E0),
+                  width: 1,
+                ),
               ),
               child: Column(
                 children: [
@@ -277,7 +301,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     '목표 깜빡임 횟수',
                     style: TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF424242),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -294,7 +319,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           }
                         },
                         icon: const Icon(Icons.remove_circle),
-                        color: Colors.deepPurple,
+                        color: const Color(0xFF9E9E9E),
                         iconSize: 40,
                       ),
                       const SizedBox(width: 20),
@@ -303,7 +328,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         style: const TextStyle(
                           fontSize: 36,
                           fontWeight: FontWeight.bold,
-                          color: Colors.deepPurple,
+                          color: Color(0xFF5B8C85),  // 세이지 그린
                         ),
                       ),
                       const SizedBox(width: 20),
@@ -317,7 +342,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           }
                         },
                         icon: const Icon(Icons.add_circle),
-                        color: Colors.deepPurple,
+                        color: const Color(0xFF5B8C85),  // 세이지 그린
                         iconSize: 40,
                       ),
                     ],
@@ -333,12 +358,18 @@ class _SettingsPageState extends State<SettingsPage> {
                   Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
+                  backgroundColor: const Color(0xFF5B8C85),  // 세이지 그린
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  elevation: 0,
                 ),
-                child: const Text('완료'),
+                child: const Text(
+                  '완료',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
           ],

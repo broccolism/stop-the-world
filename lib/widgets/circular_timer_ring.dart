@@ -48,17 +48,17 @@ class _CircularTimerRingState extends State<CircularTimerRing> {
   ];
 
   // 시간(초) → 각도 변환 (0도 = 위, 시계방향)
-  // 5개를 균등하게 360도에 분산 (0도, 72도, 144도, 216도, 288도)
+  // 5개를 균등하게 360도에 분산 (72도, 144도, 216도, 288도, 360도)
   double _secondsToAngle(int seconds) {
     final index = _availableIntervals.indexOf(seconds);
     if (index == -1) return 0;
-    return (index / _availableIntervals.length) * 360;
+    return ((index + 1) / _availableIntervals.length) * 360;
   }
 
   // 각도 → 시간(초) 변환
   int _angleToSeconds(double angle) {
     final normalized = (angle % 360) / 360;
-    final index = (normalized * _availableIntervals.length).round() % _availableIntervals.length;
+    final index = ((normalized * _availableIntervals.length).round() - 1).clamp(0, _availableIntervals.length - 1);
     return _availableIntervals[index];
   }
 
@@ -126,7 +126,7 @@ class _CircularTimerRingState extends State<CircularTimerRing> {
                   style: const TextStyle(
                     fontSize: 48,
                     fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple,
+                    color: Color(0xFF5B8C85),  // 세이지 그린
                     letterSpacing: 2,
                   ),
                 ),
@@ -136,7 +136,7 @@ class _CircularTimerRingState extends State<CircularTimerRing> {
                   onTap: widget.onStartStop,
                   child: Icon(
                     widget.isRunning ? Icons.pause_circle_outline : Icons.play_circle_outline,
-                    color: widget.isRunning ? Colors.grey : Colors.deepPurple,
+                    color: widget.isRunning ? const Color(0xFFBDBDBD) : const Color(0xFF5B8C85),  // 회색/세이지 그린
                     size: 60,
                   ),
                 ),
@@ -191,7 +191,7 @@ class CircularTimerPainter extends CustomPainter {
 
     canvas.drawCircle(center, tickCircleRadius, tickCirclePaint);
 
-    // 눈금 그리기 (5개의 간격을 균등하게 분산)
+    // 눈금 그리기 (5개의 간격을 균등하게 분산: 72도, 144도, 216도, 288도, 360도)
     const tickCount = 5;
     final tickPaint = Paint()
       ..color = Colors.grey[400]!
@@ -199,8 +199,8 @@ class CircularTimerPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     for (int i = 0; i < tickCount; i++) {
-      // 각 눈금을 360도에 균등하게 배치
-      final angle = -pi / 2 + (i / tickCount) * 2 * pi;
+      // 각 눈금을 360도에 균등하게 배치 (i+1로 시작)
+      final angle = -pi / 2 + ((i + 1) / tickCount) * 2 * pi;
       final tickStartRadius = tickCircleRadius - 8;
       final tickEndRadius = tickCircleRadius + 8;
       
@@ -216,20 +216,25 @@ class CircularTimerPainter extends CustomPainter {
       );
     }
 
-    // 2. 진행 링 (보라색)
+    // 2. 진행 링 (세이지 그린)
     final progressPaint = Paint()
-      ..color = Colors.deepPurple
+      ..color = const Color(0xFF5B8C85)  // 세이지 그린
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
 
+    // 현재 간격에 해당하는 최대 각도 계산
+    final intervals = [5, 10, 60, 120, 180];
+    final index = intervals.indexOf(intervalSeconds);
+    final maxAngle = ((index + 1) / intervals.length) * 2 * pi;
+
     double sweepAngle;
     if (isRunning) {
-      // 실행 중: 남은 시간 비율
-      sweepAngle = (remainingSeconds / intervalSeconds) * 2 * pi;
+      // 실행 중: 최대 각도 내에서 남은 시간 비율
+      sweepAngle = maxAngle * (remainingSeconds / intervalSeconds);
     } else {
-      // 중지: 100% 채움
-      sweepAngle = 2 * pi;
+      // 중지: 설정한 간격에 해당하는 각도만큼 채움
+      sweepAngle = maxAngle;
     }
 
     canvas.drawArc(
@@ -245,7 +250,7 @@ class CircularTimerPainter extends CustomPainter {
       // 핸들 위치: 현재 간격에 해당하는 각도
       final intervals = [5, 10, 60, 120, 180];
       final index = intervals.indexOf(intervalSeconds);
-      final normalized = index / intervals.length;
+      final normalized = (index + 1) / intervals.length;
       final handleAngle = -pi / 2 + (normalized * 2 * pi);
 
       final handleX = center.dx + radius * cos(handleAngle);
@@ -266,9 +271,9 @@ class CircularTimerPainter extends CustomPainter {
 
       canvas.drawCircle(handleCenter, 15, handleBackgroundPaint);
 
-      // 핸들 테두리 (보라색)
+      // 핸들 테두리 (세이지 그린)
       final handleBorderPaint = Paint()
-        ..color = Colors.deepPurple
+        ..color = const Color(0xFF5B8C85)  // 세이지 그린
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3;
 

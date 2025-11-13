@@ -77,9 +77,18 @@ class _BlacklistPageState extends State<BlacklistPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7F6),
       appBar: AppBar(
-        title: const Text('블랙리스트 앱 관리'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: const Text(
+          '집중 앱 관리',
+          style: TextStyle(
+            color: Color(0xFF424242),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF757575)),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
@@ -90,10 +99,10 @@ class _BlacklistPageState extends State<BlacklistPage> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
+                color: const Color(0xFFF5F5F5),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: Colors.orange.withOpacity(0.3),
+                  color: const Color(0xFFE0E0E0),
                   width: 1,
                 ),
               ),
@@ -102,18 +111,18 @@ class _BlacklistPageState extends State<BlacklistPage> {
                 children: [
                   Row(
                     children: [
-                      Icon(
-                        Icons.info_outline,
-                        color: Colors.orange[700],
+                      const Icon(
+                        Icons.lightbulb_outline,
+                        color: Color(0xFF5B8C85),  // 세이지 그린
                         size: 20,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          '블랙리스트에 등록된 앱이 실행 중일 때는 리마인더가 표시되지 않습니다.',
-                          style: TextStyle(
+                          '집중 앱이 실행 중일 때는 리마인더가 표시되지 않습니다.',
+                          style: const TextStyle(
                             fontSize: 13,
-                            color: Colors.orange[900],
+                            color: Color(0xFF424242),
                           ),
                         ),
                       ),
@@ -131,9 +140,9 @@ class _BlacklistPageState extends State<BlacklistPage> {
                       children: [
                         Text(
                           'Applications 폴더나 command + tab 으로 조회되는 정확한 앱 이름을 입력해주세요.',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 12,
-                            color: Colors.grey[700],
+                            color: Color(0xFF757575),
                           ),
                         ),
                       ],
@@ -168,7 +177,7 @@ class _BlacklistPageState extends State<BlacklistPage> {
                 ElevatedButton(
                   onPressed: _addApp,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
+                    backgroundColor: const Color(0xFF5B8C85),  // 세이지 그린
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
@@ -177,10 +186,14 @@ class _BlacklistPageState extends State<BlacklistPage> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
+                    elevation: 0,
                   ),
                   child: const Text(
                     '추가',
-                    style: TextStyle(fontSize: 16),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
@@ -192,8 +205,8 @@ class _BlacklistPageState extends State<BlacklistPage> {
               '등록된 앱 (${_blockedApps.length}개)',
               style: const TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF424242),
               ),
             ),
             const SizedBox(height: 12),
@@ -205,16 +218,16 @@ class _BlacklistPageState extends State<BlacklistPage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            Icons.block,
+                            Icons.lightbulb_outline,
                             size: 64,
                             color: Colors.grey[300],
                           ),
                           const SizedBox(height: 16),
-                          Text(
+                          const Text(
                             '등록된 앱이 없습니다',
                             style: TextStyle(
                               fontSize: 16,
-                              color: Colors.grey[600],
+                              color: Color(0xFF9E9E9E),
                             ),
                           ),
                         ],
@@ -226,27 +239,37 @@ class _BlacklistPageState extends State<BlacklistPage> {
                         final appName = _blockedApps[index];
                         return Card(
                           margin: const EdgeInsets.only(bottom: 8),
+                          color: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(
+                              color: Color(0xFFE0E0E0),
+                              width: 1,
+                            ),
+                          ),
                           child: ListTile(
-                            leading: Icon(
-                              Icons.block,
-                              color: Colors.red[400],
+                            leading: const Icon(
+                              Icons.lightbulb,
+                              color: Color(0xFF5B8C85),  // 세이지 그린
                             ),
                             title: Text(
                               appName,
                               style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w500,
+                                color: Color(0xFF424242),
                               ),
                             ),
                             trailing: IconButton(
                               icon: const Icon(Icons.delete_outline),
-                              color: Colors.red[400],
+                              color: const Color(0xFF9E9E9E),
                               onPressed: () {
                                 showDialog(
                                   context: context,
                                   builder: (context) => AlertDialog(
                                     title: const Text('앱 삭제'),
-                                    content: Text('$appName을(를) 블랙리스트에서 삭제하시겠습니까?'),
+                                    content: Text('$appName을(를) 집중 앱 목록에서 삭제하시겠습니까?'),
                                     actions: [
                                       TextButton(
                                         onPressed: () => Navigator.pop(context),

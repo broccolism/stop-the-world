@@ -436,10 +436,18 @@ class _ReminderPageState extends State<ReminderPage> {
               child: ElevatedButton(
                 onPressed: _skip,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey.withAlpha(204),
+                  backgroundColor: const Color(0xFF757575),  // 회색
                   foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                 ),
-                child: const Text('건너뛰기'),
+                child: const Text(
+                  '건너뛰기',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
             ),
         ],
@@ -550,10 +558,18 @@ class _ReminderPageState extends State<ReminderPage> {
             child: ElevatedButton(
               onPressed: _skip,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey.withAlpha(204),
+                backgroundColor: const Color(0xFF757575),  // 회색
                 foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
               ),
-              child: const Text('건너뛰기'),
+              child: const Text(
+                '건너뛰기',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
           ),
       ],
@@ -561,10 +577,10 @@ class _ReminderPageState extends State<ReminderPage> {
   }
 
   Color _getSimilarityColor() {
-    if (_similarity == null) return Colors.red;
-    if (_similarity! >= 0.50) return Colors.green;
-    if (_similarity! >= 0.35) return Colors.yellow;
-    return Colors.red;
+    if (_similarity == null) return const Color(0xFF9E9E9E);  // 회색
+    if (_similarity! >= 0.50) return const Color(0xFF5B8C85);  // 세이지 그린
+    if (_similarity! >= 0.35) return const Color(0xFF8BACA6);  // 옅은 세이지
+    return const Color(0xFF9E9E9E);  // 회색
   }
 }
 

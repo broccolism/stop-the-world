@@ -41,8 +41,12 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Posture Reminder',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.grey,
+          brightness: Brightness.light,
+        ),
         useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF5F7F6),
       ),
       home: const MyHomePage(title: 'Posture Reminder'),
       routes: {
@@ -71,6 +75,7 @@ class _MyHomePageState extends State<MyHomePage> {
   ReminderType _reminderType = ReminderType.poseMatching; // 현재 선택된 리마인더 타입
   int _reminderInterval = 300; // 리마인더 간격 (초, 기본값 5분)
   bool _hasDndSchedule = false; // DND 스케줄 설정 여부
+  int _blockedAppsCount = 0; // 집중 앱 개수
   int _remainingSeconds = 0; // 다음 리마인더까지 남은 시간 (초)
 
   @override
@@ -91,6 +96,7 @@ class _MyHomePageState extends State<MyHomePage> {
     final type = await _poseService.loadReminderType();
     var interval = await _poseService.loadReminderInterval();
     final hasDnd = await _poseService.hasDndScheduleToday();
+    final blockedApps = await _poseService.loadBlockedApps();
     
     // 최소값 보장 (5초)
     if (interval < 5) {
@@ -102,6 +108,7 @@ class _MyHomePageState extends State<MyHomePage> {
       _reminderType = type;
       _reminderInterval = interval;
       _hasDndSchedule = hasDnd;
+      _blockedAppsCount = blockedApps.length;
     });
   }
 
@@ -337,6 +344,14 @@ class _MyHomePageState extends State<MyHomePage> {
       
       debugPrint('[Blacklist] Blacklist settings page closed');
       
+      // 집중 앱 목록 다시 로드
+      if (mounted) {
+        final blockedApps = await _poseService.loadBlockedApps();
+        setState(() {
+          _blockedAppsCount = blockedApps.length;
+        });
+      }
+      
     } catch (e, stackTrace) {
       debugPrint('[Blacklist] Error: $e');
       debugPrint('[Blacklist] Stack trace: $stackTrace');
@@ -410,16 +425,18 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: Text(
+          widget.title,
+          style: const TextStyle(
+            color: Color(0xFF424242),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
-            tooltip: '설정',
-            onPressed: _showSettings,
-          ),
-          IconButton(
-            icon: const Icon(Icons.close),
+            icon: const Icon(Icons.close, color: Color(0xFF757575)),
             tooltip: '종료',
             onPressed: () async {
               debugPrint('[App] Exiting...');
@@ -448,13 +465,16 @@ class _MyHomePageState extends State<MyHomePage> {
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
-                          color: Colors.deepPurple,
+                          color: Color(0xFF424242),
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         _reminderType.description,
-                        style: const TextStyle(fontSize: 14, color: Colors.grey),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF757575),
+                        ),
                       ),
                     ],
                   ),
@@ -490,8 +510,12 @@ class _MyHomePageState extends State<MyHomePage> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                             decoration: BoxDecoration(
-                              color: Colors.deepPurple.withOpacity(0.1),
+                              color: const Color(0xFFF5F5F5),
                               borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFE0E0E0),
+                                width: 1,
+                              ),
                             ),
                             child: DropdownButton<ReminderType>(
                               value: _reminderType,
@@ -499,13 +523,13 @@ class _MyHomePageState extends State<MyHomePage> {
                               isExpanded: true,
                               icon: Icon(
                                 Icons.arrow_drop_down,
-                                color: _isReminderRunning ? Colors.grey : Colors.deepPurple,
+                                color: _isReminderRunning ? const Color(0xFFBDBDBD) : const Color(0xFF757575),
                               ),
                               dropdownColor: Colors.white,
                               style: TextStyle(
                                 fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: _isReminderRunning ? Colors.grey : Colors.deepPurple,
+                                fontWeight: FontWeight.w600,
+                                color: _isReminderRunning ? const Color(0xFFBDBDBD) : const Color(0xFF424242),
                               ),
                               disabledHint: Row(
                                 children: [
@@ -513,7 +537,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                     _reminderType == ReminderType.poseMatching
                                         ? Icons.accessibility_new
                                         : Icons.remove_red_eye,
-                                    color: Colors.grey,
+                                    color: const Color(0xFFBDBDBD),
                                     size: 20,
                                   ),
                                   const SizedBox(width: 8),
@@ -521,8 +545,8 @@ class _MyHomePageState extends State<MyHomePage> {
                                     _reminderType.displayName,
                                     style: const TextStyle(
                                       fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFFBDBDBD),
                                     ),
                                   ),
                                 ],
@@ -536,7 +560,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                         type == ReminderType.poseMatching
                                             ? Icons.accessibility_new
                                             : Icons.remove_red_eye,
-                                        color: Colors.deepPurple,
+                                        color: const Color(0xFF757575),
                                         size: 20,
                                       ),
                                       const SizedBox(width: 8),
@@ -557,57 +581,154 @@ class _MyHomePageState extends State<MyHomePage> {
                           ),
                         ),
                         
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 20),
                         
-                        // 자세 설정 버튼 (자세 매칭 타입일 경우에만 표시)
-                        if (_reminderType == ReminderType.poseMatching)
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: _showSettings,
-                              icon: const Icon(Icons.camera_alt),
-                              label: const Text('자세 설정', style: TextStyle(fontSize: 16)),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.deepPurple,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                        // 3개 버튼 가로 배치
+                        IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                            // 1. 모드별 설정 버튼
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _showSettings,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFE8E8E8),
+                                  foregroundColor: const Color(0xFF424242),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _reminderType == ReminderType.poseMatching
+                                          ? Icons.camera_alt
+                                          : Icons.remove_red_eye,
+                                      size: 20,
+                                      color: const Color(0xFF757575),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _reminderType == ReminderType.poseMatching
+                                          ? '자세 설정'
+                                          : '횟수 설정',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        
-                        if (_reminderType == ReminderType.poseMatching)
-                          const SizedBox(height: 12),
-                        
-                        // 방해 금지 모드 버튼
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _showDndSettings,
-                            icon: Icon(
-                              _hasDndSchedule
-                                  ? Icons.do_not_disturb_on
-                                  : Icons.do_not_disturb_off,
+                            const SizedBox(width: 10),
+                            
+                            // 2. 방해 금지 모드 버튼
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _showDndSettings,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _hasDndSchedule
+                                      ? const Color(0xFFE8A87C)  // 피치 (활성화 시 포인트)
+                                      : const Color(0xFFE8E8E8),  // 회색 (비활성화)
+                                  foregroundColor: _hasDndSchedule
+                                      ? Colors.white
+                                      : const Color(0xFF424242),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.schedule,
+                                      size: 20,
+                                      color: _hasDndSchedule
+                                          ? Colors.white
+                                          : const Color(0xFF757575),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '방해 금지\n모드',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: _hasDndSchedule
+                                            ? Colors.white
+                                            : const Color(0xFF424242),
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            label: Text(
-                              _hasDndSchedule
-                                  ? '방해 금지 모드 (설정됨)'
-                                  : '방해 금지 모드 설정',
-                              style: const TextStyle(fontSize: 16),
+                            const SizedBox(width: 10),
+                            
+                            // 3. 집중 앱 버튼
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _showBlacklistSettings,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _blockedAppsCount > 0
+                                      ? const Color(0xFF5B8C85)  // 세이지 그린 (설정됨)
+                                      : const Color(0xFFE8E8E8),  // 회색 (비활성화)
+                                  foregroundColor: _blockedAppsCount > 0
+                                      ? Colors.white
+                                      : const Color(0xFF424242),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.lightbulb,
+                                      size: 20,
+                                      color: _blockedAppsCount > 0
+                                          ? Colors.white
+                                          : const Color(0xFF757575),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _blockedAppsCount > 0
+                                          ? '집중 앱\n($_blockedAppsCount개)'
+                                          : '집중 앱',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: _blockedAppsCount > 0
+                                            ? Colors.white
+                                            : const Color(0xFF424242),
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _hasDndSchedule
-                                  ? Colors.orange
-                                  : Colors.grey,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 14),
-                            ),
-                          ),
+                          ],
+                        ),
                         ),
                         
+                        // DND 스케줄 요약
                         if (_hasDndSchedule)
                           Padding(
-                            padding: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.only(top: 12),
                             child: FutureBuilder(
                               future: _poseService.loadDndSchedule(),
                               builder: (context, snapshot) {
@@ -623,7 +744,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                     summary,
                                     style: const TextStyle(
                                       fontSize: 12,
-                                      color: Colors.grey,
+                                      color: Color(0xFF9E9E9E),
                                     ),
                                     textAlign: TextAlign.center,
                                   );
@@ -632,48 +753,6 @@ class _MyHomePageState extends State<MyHomePage> {
                               },
                             ),
                           ),
-                        
-                        const SizedBox(height: 12),
-                        
-                        // 블랙리스트 앱 관리 버튼
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _showBlacklistSettings,
-                            icon: const Icon(Icons.block),
-                            label: const Text(
-                              '블랙리스트 앱 관리',
-                              style: TextStyle(fontSize: 16),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red[400],
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 14),
-                            ),
-                          ),
-                        ),
-                        
-                        const SizedBox(height: 12),
-                        
-                        // 종료 버튼
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () async {
-                              debugPrint('[App] Exiting...');
-                              _reminderTimer?.cancel();
-                              await windowManager.destroy();
-                            },
-                            icon: const Icon(Icons.exit_to_app),
-                            label: const Text('종료', style: TextStyle(fontSize: 16)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                            ),
-                          ),
-                        ),
                         
                         const SizedBox(height: 20),
                       ],

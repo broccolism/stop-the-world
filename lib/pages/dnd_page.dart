@@ -121,10 +121,18 @@ class _DndPageState extends State<DndPage> {
     final dateString = _getFormattedDate();
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7F6),
       appBar: AppBar(
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
-        title: const Text('방해 금지 모드'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF757575)),
+        title: const Text(
+          '방해 금지 모드',
+          style: TextStyle(
+            color: Color(0xFF424242),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
       body: Column(
         children: [
@@ -132,11 +140,11 @@ class _DndPageState extends State<DndPage> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.deepPurple.withOpacity(0.1),
+            decoration: const BoxDecoration(
+              color: Colors.white,
               border: Border(
                 bottom: BorderSide(
-                  color: Colors.deepPurple.withOpacity(0.3),
+                  color: Color(0xFFE0E0E0),
                   width: 1,
                 ),
               ),
@@ -148,7 +156,7 @@ class _DndPageState extends State<DndPage> {
                   children: [
                     const Icon(
                       Icons.calendar_today,
-                      color: Colors.deepPurple,
+                      color: Color(0xFF5B8C85),  // 세이지 그린
                       size: 20,
                     ),
                     const SizedBox(width: 8),
@@ -156,8 +164,8 @@ class _DndPageState extends State<DndPage> {
                       dateString,
                       style: const TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.deepPurple,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF424242),
                       ),
                     ),
                   ],
@@ -167,7 +175,7 @@ class _DndPageState extends State<DndPage> {
                   '방해 금지 시간대를 선택하세요',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey,
+                    color: Color(0xFF757575),
                   ),
                 ),
               ],
@@ -185,23 +193,23 @@ class _DndPageState extends State<DndPage> {
                     padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
+                      color: const Color(0xFFF5F5F5),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: Colors.blue.withOpacity(0.3),
+                        color: const Color(0xFFE0E0E0),
                         width: 1,
                       ),
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.touch_app, size: 18, color: Colors.blue),
+                        Icon(Icons.touch_app, size: 18, color: Color(0xFF5B8C85)),
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             '리마인드를 받지 않을 시간대를 선택하세요',
                             style: TextStyle(
                               fontSize: 13,
-                              color: Colors.blue,
+                              color: Color(0xFF757575),
                             ),
                           ),
                         ),
@@ -234,8 +242,12 @@ class _DndPageState extends State<DndPage> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.1),
+                    color: const Color(0xFFF5F5F5),
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: const Color(0xFFE0E0E0),
+                      width: 1,
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -244,8 +256,8 @@ class _DndPageState extends State<DndPage> {
                         '선택된 시간대',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF757575),
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -253,7 +265,7 @@ class _DndPageState extends State<DndPage> {
                         _getTimeRangesSummary(),
                         style: const TextStyle(
                           fontSize: 14,
-                          color: Colors.black87,
+                          color: Color(0xFF424242),
                         ),
                       ),
                     ],
@@ -270,10 +282,14 @@ class _DndPageState extends State<DndPage> {
                           });
                         },
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.grey,
+                          foregroundColor: const Color(0xFF757575),
+                          side: const BorderSide(color: Color(0xFFE0E0E0)),
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
-                        child: const Text('모두 해제'),
+                        child: const Text(
+                          '모두 해제',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -282,15 +298,16 @@ class _DndPageState extends State<DndPage> {
                       child: ElevatedButton(
                         onPressed: _saveSchedule,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.deepPurple,
+                          backgroundColor: const Color(0xFFE8A87C),  // 피치 (포인트 컬러)
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
+                          elevation: 0,
                         ),
                         child: const Text(
                           '저장',
                           style: TextStyle(
                             fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -329,7 +346,7 @@ class _DndPageState extends State<DndPage> {
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: Colors.black87,
+                  color: Color(0xFF424242),
                 ),
                 textAlign: TextAlign.right,
               ),
@@ -345,10 +362,10 @@ class _DndPageState extends State<DndPage> {
               width: 60,
               child: Text(
                 '${hour.toString().padLeft(2, '0')}:30',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w400,
-                  color: Colors.grey.shade600,
+                  color: Color(0xFF9E9E9E),
                 ),
                 textAlign: TextAlign.right,
               ),
@@ -386,12 +403,12 @@ class _DndPageState extends State<DndPage> {
         height: 40,
         decoration: BoxDecoration(
           color: isSelected 
-              ? Colors.deepPurple 
-              : Colors.grey.withOpacity(0.15),
+              ? const Color(0xFFE8A87C)  // 피치 (포인트 컬러)
+              : const Color(0xFFF5F5F5),  // 연한 회색
           border: Border.all(
             color: isSelected
-                ? Colors.deepPurple.shade700
-                : Colors.grey.withOpacity(0.3),
+                ? const Color(0xFFE8A87C)
+                : const Color(0xFFE0E0E0),
             width: 0.5,
           ),
         ),
