@@ -15,9 +15,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
 
-  // 기본 창 설정 - 적당한 크기로 시작
+  // 기본 창 설정 - 데스크톱 앱 비율 (가로가 더 긴 레이아웃)
   WindowOptions windowOptions = const WindowOptions(
-    size: Size(600, 800),
+    size: Size(1100, 650),  // 약 17:10 비율
     center: true,
     titleBarStyle: TitleBarStyle.hidden,
     skipTaskbar: false,
@@ -77,6 +77,7 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _hasDndSchedule = false; // DND 스케줄 설정 여부
   int _blockedAppsCount = 0; // 집중 앱 개수
   int _remainingSeconds = 0; // 다음 리마인더까지 남은 시간 (초)
+  int _selectedIndex = 0; // 현재 선택된 페이지 인덱스 (0: 홈, 1: 설정, 2: DND, 3: 집중 앱)
 
   @override
   void initState() {
@@ -279,82 +280,15 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  // 설정 페이지 표시
-  Future<void> _showSettings() async {
-    if (!mounted) return;
+  // 페이지 변경 시 설정 다시 로드
+  void _onPageChanged(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
     
-    try {
-      debugPrint('[Settings] Showing settings page');
-      
-      // 설정 페이지로 이동
-      if (mounted) {
-        await Navigator.pushNamed(context, '/settings');
-      }
-      
-      debugPrint('[Settings] Settings page closed');
-      
-      // 자세 설정 완료 후에도 자동 시작하지 않음 (사용자가 수동으로 시작)
-      
-    } catch (e, stackTrace) {
-      debugPrint('[Settings] Error: $e');
-      debugPrint('[Settings] Stack trace: $stackTrace');
-    }
-  }
-
-  // DND 설정 페이지 표시
-  Future<void> _showDndSettings() async {
-    if (!mounted) return;
-    
-    try {
-      debugPrint('[DND] Showing DND settings page');
-      
-      // DND 설정 페이지로 이동
-      if (mounted) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const DndPage()),
-        );
-      }
-      
-      debugPrint('[DND] DND settings page closed');
-      
-      // DND 설정 상태 새로고침
-      await _loadSettings();
-      
-    } catch (e, stackTrace) {
-      debugPrint('[DND] Error: $e');
-      debugPrint('[DND] Stack trace: $stackTrace');
-    }
-  }
-
-  // 블랙리스트 설정 페이지 표시
-  Future<void> _showBlacklistSettings() async {
-    if (!mounted) return;
-    
-    try {
-      debugPrint('[Blacklist] Showing blacklist settings page');
-      
-      // 블랙리스트 설정 페이지로 이동
-      if (mounted) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const BlacklistPage()),
-        );
-      }
-      
-      debugPrint('[Blacklist] Blacklist settings page closed');
-      
-      // 집중 앱 목록 다시 로드
-      if (mounted) {
-        final blockedApps = await _poseService.loadBlockedApps();
-        setState(() {
-          _blockedAppsCount = blockedApps.length;
-        });
-      }
-      
-    } catch (e, stackTrace) {
-      debugPrint('[Blacklist] Error: $e');
-      debugPrint('[Blacklist] Stack trace: $stackTrace');
+    // 홈으로 돌아올 때 설정 새로고침
+    if (index == 0) {
+      _loadSettings();
     }
   }
 
@@ -421,32 +355,9 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: Text(
-          widget.title,
-          style: const TextStyle(
-            color: Color(0xFF424242),
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.close, color: Color(0xFF757575)),
-            tooltip: '종료',
-            onPressed: () async {
-              debugPrint('[App] Exiting...');
-              _reminderTimer?.cancel();
-              await windowManager.destroy();
-            },
-          ),
-        ],
-      ),
-      body: LayoutBuilder(
+  // 홈 화면 위젯 (기존 body 내용)
+  Widget _buildHomePage() {
+    return LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
             child: ConstrainedBox(
@@ -460,9 +371,11 @@ class _MyHomePageState extends State<MyHomePage> {
                   Column(
                     children: [
                       const SizedBox(height: 20),
-                      const Text(
-                        'Posture Reminder',
-                        style: TextStyle(
+                      Text(
+                        _reminderType == ReminderType.poseMatching
+                            ? '자세 교정'
+                            : '눈 깜빡이기',
+                        style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF424242),
@@ -499,7 +412,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     },
                   ),
                   
-                  // 하단: 버튼들
+                  // 하단: 리마인더 타입 선택
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 40),
                     child: Column(
@@ -582,179 +495,6 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                         
                         const SizedBox(height: 20),
-                        
-                        // 3개 버튼 가로 배치
-                        IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                            // 1. 모드별 설정 버튼
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: _showSettings,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFE8E8E8),
-                                  foregroundColor: const Color(0xFF424242),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      _reminderType == ReminderType.poseMatching
-                                          ? Icons.camera_alt
-                                          : Icons.remove_red_eye,
-                                      size: 20,
-                                      color: const Color(0xFF757575),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      _reminderType == ReminderType.poseMatching
-                                          ? '자세 설정'
-                                          : '횟수 설정',
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            
-                            // 2. 방해 금지 모드 버튼
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: _showDndSettings,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _hasDndSchedule
-                                      ? const Color(0xFFE8A87C)  // 피치 (활성화 시 포인트)
-                                      : const Color(0xFFE8E8E8),  // 회색 (비활성화)
-                                  foregroundColor: _hasDndSchedule
-                                      ? Colors.white
-                                      : const Color(0xFF424242),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.schedule,
-                                      size: 20,
-                                      color: _hasDndSchedule
-                                          ? Colors.white
-                                          : const Color(0xFF757575),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      '방해 금지\n모드',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: _hasDndSchedule
-                                            ? Colors.white
-                                            : const Color(0xFF424242),
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            
-                            // 3. 집중 앱 버튼
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: _showBlacklistSettings,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _blockedAppsCount > 0
-                                      ? const Color(0xFF5B8C85)  // 세이지 그린 (설정됨)
-                                      : const Color(0xFFE8E8E8),  // 회색 (비활성화)
-                                  foregroundColor: _blockedAppsCount > 0
-                                      ? Colors.white
-                                      : const Color(0xFF424242),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.lightbulb,
-                                      size: 20,
-                                      color: _blockedAppsCount > 0
-                                          ? Colors.white
-                                          : const Color(0xFF757575),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      _blockedAppsCount > 0
-                                          ? '집중 앱\n($_blockedAppsCount개)'
-                                          : '집중 앱',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: _blockedAppsCount > 0
-                                            ? Colors.white
-                                            : const Color(0xFF424242),
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        ),
-                        
-                        // DND 스케줄 요약
-                        if (_hasDndSchedule)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: FutureBuilder(
-                              future: _poseService.loadDndSchedule(),
-                              builder: (context, snapshot) {
-                                if (snapshot.hasData && snapshot.data != null) {
-                                  final schedule = snapshot.data!;
-                                  if (schedule.timeRanges.isEmpty) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  final summary = schedule.timeRanges
-                                      .map((r) => r.displayText)
-                                      .join(', ');
-                                  return Text(
-                                    summary,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF9E9E9E),
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  );
-                                }
-                                return const SizedBox.shrink();
-                              },
-                            ),
-                          ),
-                        
-                        const SizedBox(height: 20),
                       ],
                     ),
                   ),
@@ -763,6 +503,92 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           );
         },
+      );
+  }
+
+  // 사이드바 위젯
+  Widget _buildSidebar() {
+    return Container(
+      width: 200,
+      color: const Color(0xFFF5F5F5),
+      child: Column(
+        children: [
+          const SizedBox(height: 20),
+          _buildSidebarItem(0, Icons.home, '홈'),
+          _buildSidebarItem(
+            1,
+            _reminderType == ReminderType.poseMatching
+                ? Icons.accessibility_new
+                : Icons.remove_red_eye,
+            _reminderType == ReminderType.poseMatching ? '자세 설정' : '횟수 설정',
+          ),
+          _buildSidebarItem(2, Icons.schedule, '방해 금지 모드'),
+          _buildSidebarItem(3, Icons.lightbulb, '집중 앱'),
+        ],
+      ),
+    );
+  }
+
+  // 사이드바 항목 위젯
+  Widget _buildSidebarItem(int index, IconData icon, String label) {
+    final isSelected = _selectedIndex == index;
+    return InkWell(
+      onTap: () => _onPageChanged(index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        color: isSelected ? const Color(0xFF5B8C85) : Colors.transparent,
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? Colors.white : const Color(0xFF757575),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isSelected ? Colors.white : const Color(0xFF757575),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 선택된 페이지 위젯 반환
+  Widget _getSelectedPage() {
+    switch (_selectedIndex) {
+      case 0:
+        return _buildHomePage();
+      case 1:
+        return const SettingsPage();
+      case 2:
+        return const DndPage();
+      case 3:
+        return const BlacklistPage();
+      default:
+        return _buildHomePage();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Row(
+        children: [
+          // 좌측: 사이드바
+          _buildSidebar(),
+          // 우측: 선택된 페이지 컨텐츠
+          Expanded(
+            child: _getSelectedPage(),
+          ),
+        ],
       ),
     );
   }

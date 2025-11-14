@@ -29,7 +29,7 @@ extension ReminderTypeExtension on ReminderType {
       case ReminderType.poseMatching:
         return '자세 교정';
       case ReminderType.blinkCount:
-        return '눈 깜빡임 연습';
+        return '눈 깜빡이기';
     }
   }
   

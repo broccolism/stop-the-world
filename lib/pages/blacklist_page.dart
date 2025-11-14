@@ -78,18 +78,6 @@ class _BlacklistPageState extends State<BlacklistPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F6),
-      appBar: AppBar(
-        title: const Text(
-          '집중 앱 관리',
-          style: TextStyle(
-            color: Color(0xFF424242),
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF757575)),
-      ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(

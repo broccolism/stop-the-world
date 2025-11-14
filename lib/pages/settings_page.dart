@@ -43,7 +43,7 @@ class _SettingsPageState extends State<SettingsPage> {
     } else {
       setState(() {
         _isInitialized = true;
-        _statusMessage = '눈 깜빡임 연습 설정';
+        _statusMessage = '눈 깜빡이기 설정';
       });
     }
   }
@@ -135,11 +135,8 @@ class _SettingsPageState extends State<SettingsPage> {
         _statusMessage = '자세가 저장되었습니다! ✓';
       });
 
-      await Future.delayed(const Duration(seconds: 1));
-      
-      if (mounted) {
-        Navigator.pop(context);
-      }
+      // 사이드바 방식이므로 Navigator.pop() 제거
+      // 메시지는 계속 표시됨
     } catch (e) {
       debugPrint('[Settings] Save error: $e');
       setState(() {
@@ -165,18 +162,6 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F6),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF757575)),
-        title: Text(
-          _reminderType == ReminderType.poseMatching ? '자세 설정' : '눈 깜빡임 설정',
-          style: const TextStyle(
-            color: Color(0xFF424242),
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
       body: SafeArea(
         child: _reminderType == ReminderType.poseMatching
             ? _buildPoseMatchingSettings()
@@ -268,7 +253,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 24),
             const Text(
-              '눈 깜빡임 연습',
+              '눈 깜빡이기',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w600,
@@ -351,27 +336,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
             const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF5B8C85),  // 세이지 그린
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  elevation: 0,
-                ),
-                child: const Text(
-                  '완료',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
+            // 완료 버튼 제거: 사이드바 방식이므로 사용자가 직접 다른 페이지로 이동
           ],
         ),
       ),

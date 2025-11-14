@@ -56,7 +56,7 @@ class _DndPageState extends State<DndPage> {
             duration: Duration(seconds: 2),
           ),
         );
-        Navigator.pop(context);
+        // 사이드바 방식이므로 Navigator.pop() 제거
       }
     } else {
       // 시간 범위가 있으면 저장
@@ -74,7 +74,7 @@ class _DndPageState extends State<DndPage> {
             duration: Duration(seconds: 2),
           ),
         );
-        Navigator.pop(context);
+        // 사이드바 방식이므로 Navigator.pop() 제거
       }
     }
   }
@@ -122,18 +122,6 @@ class _DndPageState extends State<DndPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F6),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF757575)),
-        title: const Text(
-          '방해 금지 모드',
-          style: TextStyle(
-            color: Color(0xFF424242),
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
       body: Column(
         children: [
           // 상단: 날짜 표시
