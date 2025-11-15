@@ -1,10 +1,10 @@
 enum ReminderType {
   poseMatching,  // 자세 매칭
-  blinkCount     // 눈 깜빡임
+  blinkCount,    // 눈 깜빡임
 }
 
 extension ReminderTypeExtension on ReminderType {
-  String tostring() {
+  String toStringValue() {
     switch (this) {
       case ReminderType.poseMatching:
         return 'poseMatching';

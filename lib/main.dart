@@ -372,9 +372,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     children: [
                       const SizedBox(height: 20),
                       Text(
-                        _reminderType == ReminderType.poseMatching
-                            ? '자세 교정'
-                            : '눈 깜빡이기',
+                        _reminderType.displayName,
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -506,6 +504,26 @@ class _MyHomePageState extends State<MyHomePage> {
       );
   }
 
+  // 사이드바 아이콘 반환
+  IconData _getSidebarIcon() {
+    switch (_reminderType) {
+      case ReminderType.poseMatching:
+        return Icons.accessibility_new;
+      case ReminderType.blinkCount:
+        return Icons.remove_red_eye;
+    }
+  }
+
+  // 사이드바 라벨 반환
+  String _getSidebarLabel() {
+    switch (_reminderType) {
+      case ReminderType.poseMatching:
+        return '자세 설정';
+      case ReminderType.blinkCount:
+        return '횟수 설정';
+    }
+  }
+
   // 사이드바 위젯
   Widget _buildSidebar() {
     return Container(
@@ -517,10 +535,8 @@ class _MyHomePageState extends State<MyHomePage> {
           _buildSidebarItem(0, Icons.home, '홈'),
           _buildSidebarItem(
             1,
-            _reminderType == ReminderType.poseMatching
-                ? Icons.accessibility_new
-                : Icons.remove_red_eye,
-            _reminderType == ReminderType.poseMatching ? '자세 설정' : '횟수 설정',
+            _getSidebarIcon(),
+            _getSidebarLabel(),
           ),
           _buildSidebarItem(2, Icons.schedule, '방해 금지 모드'),
           _buildSidebarItem(3, Icons.lightbulb, '집중 앱'),

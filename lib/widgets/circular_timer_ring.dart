@@ -9,13 +9,13 @@ class CircularTimerRing extends StatefulWidget {
   final VoidCallback onStartStop;
 
   const CircularTimerRing({
-    Key? key,
+    super.key,
     required this.isRunning,
     required this.intervalSeconds,
     required this.remainingSeconds,
     required this.onIntervalChanged,
     required this.onStartStop,
-  }) : super(key: key);
+  });
 
   @override
   State<CircularTimerRing> createState() => _CircularTimerRingState();
@@ -43,12 +43,15 @@ class _CircularTimerRingState extends State<CircularTimerRing> {
     5,      // 5초
     10,     // 10초
     60,     // 1분
-    120,    // 2분
-    180,    // 3분
+    600,    // 10분
+    1200,   // 20분
+    1800,   // 30분
+    2700,   // 45분
+    3600,   // 1시간
   ];
 
   // 시간(초) → 각도 변환 (0도 = 위, 시계방향)
-  // 5개를 균등하게 360도에 분산 (72도, 144도, 216도, 288도, 360도)
+  // 8개를 균등하게 360도에 분산
   double _secondsToAngle(int seconds) {
     final index = _availableIntervals.indexOf(seconds);
     if (index == -1) return 0;
@@ -191,8 +194,8 @@ class CircularTimerPainter extends CustomPainter {
 
     canvas.drawCircle(center, tickCircleRadius, tickCirclePaint);
 
-    // 눈금 그리기 (5개의 간격을 균등하게 분산: 72도, 144도, 216도, 288도, 360도)
-    const tickCount = 5;
+    // 눈금 그리기 (8개의 간격을 균등하게 분산)
+    const tickCount = 8;
     final tickPaint = Paint()
       ..color = Colors.grey[400]!
       ..strokeWidth = 1.5
@@ -224,7 +227,7 @@ class CircularTimerPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     // 현재 간격에 해당하는 최대 각도 계산
-    final intervals = [5, 10, 60, 120, 180];
+    final intervals = [5, 10, 60, 600, 1200, 1800, 2700, 3600];
     final index = intervals.indexOf(intervalSeconds);
     final maxAngle = ((index + 1) / intervals.length) * 2 * pi;
 
@@ -248,7 +251,7 @@ class CircularTimerPainter extends CustomPainter {
     // 3. 드래그 핸들 (실행 중이 아닐 때만 표시)
     if (!isRunning) {
       // 핸들 위치: 현재 간격에 해당하는 각도
-      final intervals = [5, 10, 60, 120, 180];
+      final intervals = [5, 10, 60, 600, 1200, 1800, 2700, 3600];
       final index = intervals.indexOf(intervalSeconds);
       final normalized = (index + 1) / intervals.length;
       final handleAngle = -pi / 2 + (normalized * 2 * pi);

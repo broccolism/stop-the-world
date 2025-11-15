@@ -149,7 +149,7 @@ class PoseService {
 
   Future<void> saveReminderType(ReminderType type) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('reminder_type', type.tostring());
+    await prefs.setString('reminder_type', type.toStringValue());
   }
 
   Future<ReminderType> loadReminderType() async {
@@ -252,5 +252,6 @@ class PoseService {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getStringList('blocked_apps') ?? ['zoom.us']; // 기본값: Zoom
   }
+
 }
 

@@ -53,7 +53,7 @@ class _ReminderPageState extends State<ReminderPage> {
     
     if (_reminderType == ReminderType.poseMatching) {
       await _initializePoseMatching();
-    } else {
+    } else if (_reminderType == ReminderType.blinkCount) {
       await _initializeBlinkCount();
     }
   }
@@ -138,6 +138,7 @@ class _ReminderPageState extends State<ReminderPage> {
       });
     }
   }
+
 
   void _startPoseDetectionLoop() {
     _detectionTimer = Timer.periodic(const Duration(milliseconds: 200), (timer) async {
@@ -246,6 +247,7 @@ class _ReminderPageState extends State<ReminderPage> {
     });
   }
 
+
   void _closeWithDelay() {
     if (_isClosing) return;
     
@@ -277,11 +279,20 @@ class _ReminderPageState extends State<ReminderPage> {
 
   @override
   Widget build(BuildContext context) {
+    Widget bodyWidget;
+    
+    switch (_reminderType) {
+      case ReminderType.poseMatching:
+        bodyWidget = _buildPoseMatchingUI();
+        break;
+      case ReminderType.blinkCount:
+        bodyWidget = _buildBlinkCountUI();
+        break;
+    }
+    
     return Scaffold(
       backgroundColor: Colors.black,
-      body: _reminderType == ReminderType.poseMatching
-          ? _buildPoseMatchingUI()
-          : _buildBlinkCountUI(),
+      body: bodyWidget,
     );
   }
 
@@ -575,6 +586,7 @@ class _ReminderPageState extends State<ReminderPage> {
       ],
     );
   }
+
 
   Color _getSimilarityColor() {
     if (_similarity == null) return const Color(0xFF9E9E9E);  // 회색
