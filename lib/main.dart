@@ -8,6 +8,7 @@ import 'pages/reminder_page.dart';
 import 'pages/dnd_page.dart';
 import 'pages/blacklist_page.dart';
 import 'services/pose_service.dart';
+import 'services/app_icon_service.dart';
 import 'models/reminder_type.dart';
 import 'widgets/circular_timer_ring.dart';
 
@@ -73,7 +74,7 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _isReminderRunning = false; // 리마인더 실행 중 여부
   final PoseService _poseService = PoseService();
   ReminderType _reminderType = ReminderType.poseMatching; // 현재 선택된 리마인더 타입
-  int _reminderInterval = 300; // 리마인더 간격 (초, 기본값 5분)
+  int _reminderInterval = 60; // 리마인더 간격 (초, 기본값 1분)
   bool _hasDndSchedule = false; // DND 스케줄 설정 여부
   int _blockedAppsCount = 0; // 집중 앱 개수
   int _remainingSeconds = 0; // 다음 리마인더까지 남은 시간 (초)
@@ -84,6 +85,8 @@ class _MyHomePageState extends State<MyHomePage> {
     super.initState();
     _loadSettings();
     // 자동 시작 제거 - 사용자가 수동으로 시작해야 함
+    // 초기 아이콘을 play로 설정
+    AppIconService.updateToPlay();
   }
 
   @override
@@ -99,10 +102,17 @@ class _MyHomePageState extends State<MyHomePage> {
     final hasDnd = await _poseService.hasDndScheduleToday();
     final blockedApps = await _poseService.loadBlockedApps();
     
-    // 최소값 보장 (5초)
-    if (interval < 5) {
-      interval = 5;
+    // 유효한 간격 목록
+    const validIntervals = [5, 10, 60, 600, 1200, 1800, 2700, 3600];
+    
+    // 유효하지 않은 간격이면 가장 가까운 유효한 값으로 변경
+    if (!validIntervals.contains(interval)) {
+      // 가장 가까운 값 찾기
+      interval = validIntervals.reduce((a, b) => 
+        (interval - a).abs() < (interval - b).abs() ? a : b
+      );
       await _poseService.saveReminderInterval(interval);
+      debugPrint('[Settings] Invalid interval detected, changed to: $interval');
     }
     
     setState(() {
@@ -176,6 +186,9 @@ class _MyHomePageState extends State<MyHomePage> {
       _isReminderRunning = true;
     });
     
+    // 아이콘을 pause로 변경 (리마인더 실행 중)
+    AppIconService.updateToPause();
+    
     // 카운트다운 시작
     _startCountdown();
     
@@ -194,6 +207,9 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       _isReminderRunning = false;
     });
+    
+    // 아이콘을 play로 변경 (리마인더 중지 상태)
+    AppIconService.updateToPlay();
     
     debugPrint('[Reminder] Paused reminder loop');
   }

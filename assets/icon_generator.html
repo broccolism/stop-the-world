@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>pause! Icon Generator</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: #f0f0f0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            padding: 40px;
+        }
+        .icon-preview {
+            margin: 20px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 20px;
+            display: inline-block;
+        }
+        canvas {
+            border-radius: 16px;
+            display: block;
+        }
+        .icons-container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        button {
+            margin: 10px;
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            background: #5B8C85;
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button:hover {
+            background: #4a7268;
+        }
+        .instructions {
+            max-width: 800px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            margin: 20px;
+        }
+        h3 {
+            margin-top: 0;
+            color: #424242;
+        }
+    </style>
+</head>
+<body>
+    <div class="instructions">
+        <h2>pause! 앱 아이콘 생성기</h2>
+        <p>세 가지 상태의 아이콘을 생성합니다:</p>
+        <ul>
+            <li><strong>Play (재생)</strong>: 리마인더가 중지된 상태</li>
+            <li><strong>Pause (일시정지)</strong>: 리마인더가 실행 중인 상태</li>
+            <li><strong>DND (방해금지)</strong>: 방해금지 모드 활성화</li>
+        </ul>
+        <p>각 아이콘을 다운로드하고 파일명을 정확히 입력하여 <code>assets</code> 폴더에 저장하세요.</p>
+    </div>
+    
+    <div class="icons-container">
+        <div class="icon-preview">
+            <h3>Play (재생)</h3>
+            <canvas id="playCanvas" width="1024" height="1024" style="width: 256px; height: 256px;"></canvas>
+            <button onclick="downloadIcon('play')">다운로드: icon_play.png</button>
+        </div>
+        
+        <div class="icon-preview">
+            <h3>Pause (일시정지)</h3>
+            <canvas id="pauseCanvas" width="1024" height="1024" style="width: 256px; height: 256px;"></canvas>
+            <button onclick="downloadIcon('pause')">다운로드: icon_pause.png</button>
+        </div>
+        
+        <div class="icon-preview">
+            <h3>DND (방해금지)</h3>
+            <canvas id="dndCanvas" width="1024" height="1024" style="width: 256px; height: 256px;"></canvas>
+            <button onclick="downloadIcon('dnd')">다운로드: icon_dnd.png</button>
+        </div>
+    </div>
+    
+    <button onclick="downloadAll()" style="font-size: 18px; padding: 16px 32px;">
+        모든 아이콘 다운로드 (3개)
+    </button>
+    
+    <script>
+        const size = 1024;
+        const center = size / 2;
+        const baseColor = '#5B8C85';
+        
+        function drawPlayIcon() {
+            const canvas = document.getElementById('playCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 둥근 모서리 적용
+            const cornerRadius = 180; // macOS 스타일 둥근 모서리
+            
+            // 배경 그라디언트
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, baseColor);
+            gradient.addColorStop(1, '#4a7268');
+            
+            ctx.fillStyle = gradient;
+            
+            // 둥근 사각형 그리기
+            ctx.beginPath();
+            ctx.moveTo(cornerRadius, 0);
+            ctx.lineTo(size - cornerRadius, 0);
+            ctx.quadraticCurveTo(size, 0, size, cornerRadius);
+            ctx.lineTo(size, size - cornerRadius);
+            ctx.quadraticCurveTo(size, size, size - cornerRadius, size);
+            ctx.lineTo(cornerRadius, size);
+            ctx.quadraticCurveTo(0, size, 0, size - cornerRadius);
+            ctx.lineTo(0, cornerRadius);
+            ctx.quadraticCurveTo(0, 0, cornerRadius, 0);
+            ctx.closePath();
+            ctx.fill();
+            
+            // 재생 삼각형
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            const triangleSize = 400;
+            const offsetX = 40; // 약간 오른쪽으로 이동
+            ctx.moveTo(center - triangleSize/2 + offsetX, center - triangleSize/1.5);
+            ctx.lineTo(center - triangleSize/2 + offsetX, center + triangleSize/1.5);
+            ctx.lineTo(center + triangleSize/1.5 + offsetX, center);
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        function drawPauseIcon() {
+            const canvas = document.getElementById('pauseCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 둥근 모서리 적용
+            const cornerRadius = 180;
+            
+            // 배경 그라디언트
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, baseColor);
+            gradient.addColorStop(1, '#4a7268');
+            
+            ctx.fillStyle = gradient;
+            
+            // 둥근 사각형 그리기
+            ctx.beginPath();
+            ctx.moveTo(cornerRadius, 0);
+            ctx.lineTo(size - cornerRadius, 0);
+            ctx.quadraticCurveTo(size, 0, size, cornerRadius);
+            ctx.lineTo(size, size - cornerRadius);
+            ctx.quadraticCurveTo(size, size, size - cornerRadius, size);
+            ctx.lineTo(cornerRadius, size);
+            ctx.quadraticCurveTo(0, size, 0, size - cornerRadius);
+            ctx.lineTo(0, cornerRadius);
+            ctx.quadraticCurveTo(0, 0, cornerRadius, 0);
+            ctx.closePath();
+            ctx.fill();
+            
+            // 일시정지 바 (두 개의 세로 막대)
+            ctx.fillStyle = 'white';
+            const barWidth = 120;
+            const barHeight = 440;
+            const spacing = 80;
+            
+            // 왼쪽 바
+            const leftX = center - spacing / 2 - barWidth;
+            const topY = center - barHeight / 2;
+            roundRect(ctx, leftX, topY, barWidth, barHeight, 20);
+            
+            // 오른쪽 바
+            const rightX = center + spacing / 2;
+            roundRect(ctx, rightX, topY, barWidth, barHeight, 20);
+        }
+        
+        function drawDndIcon() {
+            const canvas = document.getElementById('dndCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 둥근 모서리 적용
+            const cornerRadius = 180;
+            
+            // 배경 그라디언트 (세이지 그린 - 다른 아이콘과 동일)
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, baseColor);
+            gradient.addColorStop(1, '#4a7268');
+            
+            ctx.fillStyle = gradient;
+            
+            // 둥근 사각형 그리기
+            ctx.beginPath();
+            ctx.moveTo(cornerRadius, 0);
+            ctx.lineTo(size - cornerRadius, 0);
+            ctx.quadraticCurveTo(size, 0, size, cornerRadius);
+            ctx.lineTo(size, size - cornerRadius);
+            ctx.quadraticCurveTo(size, size, size - cornerRadius, size);
+            ctx.lineTo(cornerRadius, size);
+            ctx.quadraticCurveTo(0, size, 0, size - cornerRadius);
+            ctx.lineTo(0, cornerRadius);
+            ctx.quadraticCurveTo(0, 0, cornerRadius, 0);
+            ctx.closePath();
+            ctx.fill();
+            
+            // 초승달 모양 - 배경색으로 원을 그려서 초승달 만들기
+            const moonRadius = 200;
+            const cutoutRadius = 170;
+            const offsetX = 100;
+            
+            // 1. 흰색 큰 원 그리기
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(center, center, moonRadius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 2. 배경색과 같은 색으로 작은 원 그리기 (초승달 만들기)
+            const cutoutGradient = ctx.createLinearGradient(0, 0, size, size);
+            cutoutGradient.addColorStop(0, baseColor);
+            cutoutGradient.addColorStop(1, '#4a7268');
+            
+            ctx.fillStyle = cutoutGradient;
+            ctx.beginPath();
+            ctx.arc(center + offsetX, center, cutoutRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        function roundRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        function downloadIcon(type) {
+            const canvasId = type + 'Canvas';
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = `icon_${type}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+        
+        function downloadAll() {
+            setTimeout(() => downloadIcon('play'), 0);
+            setTimeout(() => downloadIcon('pause'), 500);
+            setTimeout(() => downloadIcon('dnd'), 1000);
+        }
+        
+        // 모든 아이콘 그리기
+        drawPlayIcon();
+        drawPauseIcon();
+        drawDndIcon();
+    </script>
+</body>
+</html>

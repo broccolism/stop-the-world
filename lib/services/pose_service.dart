@@ -175,7 +175,7 @@ class PoseService {
 
   Future<int> loadReminderInterval() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt('reminder_interval_seconds') ?? 300; // 기본값 300초(5분)
+    return prefs.getInt('reminder_interval_seconds') ?? 60; // 기본값 60초(1분)
   }
 
   // MARK: - DND Schedule Management
