@@ -21,7 +21,7 @@ void main() async {
     center: true,
     titleBarStyle: TitleBarStyle.hidden,
     skipTaskbar: false,
-    title: 'Posture Reminder',
+    title: 'pause!',
   );
 
   windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -39,7 +39,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Posture Reminder',
+      title: 'pause!',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.grey,
@@ -48,7 +48,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFFF5F7F6),
       ),
-      home: const MyHomePage(title: 'Posture Reminder'),
+      home: const MyHomePage(title: 'pause!'),
       routes: {
         '/settings': (context) => const SettingsPage(),
         '/reminder': (context) => const ReminderPage(),
