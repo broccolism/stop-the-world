@@ -128,11 +128,11 @@ class _MyHomePageState extends State<MyHomePage> {
   // (DND는 타이머 링에서 표시하므로 dock 아이콘에 영향 없음)
   Future<void> _updateDockIcon() async {
     if (_isReminderRunning) {
-      // 리마인더 실행 중 -> 일시정지 아이콘 표시
-      await _poseService.setDockIcon('pause');
-    } else {
-      // 리마인더 중단 중 -> 재생 아이콘 표시
+      // 리마인더 실행 중 -> 재생 아이콘 표시
       await _poseService.setDockIcon('play');
+    } else {
+      // 리마인더 중단 중 -> 일시정지 아이콘 표시
+      await _poseService.setDockIcon('pause');
     }
   }
 

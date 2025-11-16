@@ -24,7 +24,10 @@ class _ReminderPageState extends State<ReminderPage> {
   String? _snapshotPath;
   double _cameraOpacity = 0.6;
   DateTime? _goodPoseStartTime;
+  DateTime? _noPoseStartTime; // 자세가 감지되지 않은 시작 시간
+  bool _hasShownNoPoseAlert = false; // 자세 미감지 알림 표시 여부
   static const Duration _requiredHoldDuration = Duration(seconds: 5);
+  static const Duration _noPoseAlertDuration = Duration(seconds: 2);
   
   // 깜빡임 감지용 변수
   int _currentBlinkCount = 0;
@@ -239,43 +242,62 @@ class _ReminderPageState extends State<ReminderPage> {
               if (pose.joints.isEmpty) {
                 _statusMessage = '자세가 감지되지 않았습니다';
                 _goodPoseStartTime = null; // 타이머 리셋
-              } else if (similarity >= 0.70) {
-                // 좋은 자세 달성!
-                if (_goodPoseStartTime == null) {
-                  // 처음 달성한 경우 타이머 시작
-                  _goodPoseStartTime = DateTime.now();
-                  _statusMessage = '좋아요! 5초간 유지하세요... (${(similarity * 100).toStringAsFixed(1)}%)';
-                  debugPrint('[Reminder] Good pose started at ${DateTime.now()}, timer begins');
-                } else {
-                  // 이미 타이머가 시작된 경우 경과 시간 확인
-                  final elapsed = DateTime.now().difference(_goodPoseStartTime!);
-                  final elapsedSeconds = elapsed.inMilliseconds / 1000.0;
-                  final remaining = _requiredHoldDuration - elapsed;
-                  
-                  debugPrint('[Reminder] Elapsed: ${elapsedSeconds.toStringAsFixed(1)}s / 5.0s, Similarity: ${(similarity * 100).toStringAsFixed(1)}%');
-                  
-                  if (remaining.inMilliseconds <= 0) {
-                    // 5초 달성!
-                    _statusMessage = '완벽합니다! (${(similarity * 100).toStringAsFixed(1)}%)';
-                    debugPrint('[Reminder] ✓ Held for ${elapsedSeconds.toStringAsFixed(1)} seconds, closing now');
-                    _closeWithDelay();
-                  } else {
-                    // 아직 5초 미만
-                    final remainingSeconds = (remaining.inMilliseconds / 1000).ceil();
-                    _statusMessage = '좋아요! $remainingSeconds초 더 유지... (${(similarity * 100).toStringAsFixed(1)}%)';
+                
+                // 자세 미감지 타이머 시작
+                if (_noPoseStartTime == null) {
+                  _noPoseStartTime = DateTime.now();
+                  _hasShownNoPoseAlert = false;
+                } else if (!_hasShownNoPoseAlert) {
+                  // 2초 이상 감지되지 않으면 알림 표시
+                  final elapsed = DateTime.now().difference(_noPoseStartTime!);
+                  if (elapsed >= _noPoseAlertDuration) {
+                    _hasShownNoPoseAlert = true;
+                    _showNoPoseAlert();
                   }
                 }
               } else {
-                // 유사도가 70% 미만으로 떨어짐 - 타이머 리셋
-                if (_goodPoseStartTime != null) {
-                  debugPrint('[Reminder] Pose lost, timer reset');
-                  _goodPoseStartTime = null;
-                }
+                // 자세가 감지되면 타이머 리셋
+                _noPoseStartTime = null;
+                _hasShownNoPoseAlert = false;
                 
-                if (similarity >= 0.55) {
-                  _statusMessage = '조금만 더! (${(similarity * 100).toStringAsFixed(1)}%)';
+                if (similarity >= 0.70) {
+                  // 좋은 자세 달성!
+                  if (_goodPoseStartTime == null) {
+                    // 처음 달성한 경우 타이머 시작
+                    _goodPoseStartTime = DateTime.now();
+                    _statusMessage = '좋아요! 5초간 유지하세요... (${(similarity * 100).toStringAsFixed(1)}%)';
+                    debugPrint('[Reminder] Good pose started at ${DateTime.now()}, timer begins');
+                  } else {
+                    // 이미 타이머가 시작된 경우 경과 시간 확인
+                    final elapsed = DateTime.now().difference(_goodPoseStartTime!);
+                    final elapsedSeconds = elapsed.inMilliseconds / 1000.0;
+                    final remaining = _requiredHoldDuration - elapsed;
+                    
+                    debugPrint('[Reminder] Elapsed: ${elapsedSeconds.toStringAsFixed(1)}s / 5.0s, Similarity: ${(similarity * 100).toStringAsFixed(1)}%');
+                    
+                    if (remaining.inMilliseconds <= 0) {
+                      // 5초 달성!
+                      _statusMessage = '완벽합니다! (${(similarity * 100).toStringAsFixed(1)}%)';
+                      debugPrint('[Reminder] ✓ Held for ${elapsedSeconds.toStringAsFixed(1)} seconds, closing now');
+                      _closeWithDelay();
+                    } else {
+                      // 아직 5초 미만
+                      final remainingSeconds = (remaining.inMilliseconds / 1000).ceil();
+                      _statusMessage = '좋아요! $remainingSeconds초 더 유지... (${(similarity * 100).toStringAsFixed(1)}%)';
+                    }
+                  }
                 } else {
-                  _statusMessage = '자세를 맞춰주세요 (${(similarity * 100).toStringAsFixed(1)}%)';
+                  // 유사도가 70% 미만으로 떨어짐 - 타이머 리셋
+                  if (_goodPoseStartTime != null) {
+                    debugPrint('[Reminder] Pose lost, timer reset');
+                    _goodPoseStartTime = null;
+                  }
+                  
+                  if (similarity >= 0.55) {
+                    _statusMessage = '조금만 더! (${(similarity * 100).toStringAsFixed(1)}%)';
+                  } else {
+                    _statusMessage = '자세를 맞춰주세요 (${(similarity * 100).toStringAsFixed(1)}%)';
+                  }
                 }
               }
             });
@@ -285,6 +307,19 @@ class _ReminderPageState extends State<ReminderPage> {
             setState(() {
               _currentPose = pose;
               _statusMessage = '자세가 감지되지 않았습니다';
+              
+              // 자세 미감지 타이머 시작
+              if (_noPoseStartTime == null) {
+                _noPoseStartTime = DateTime.now();
+                _hasShownNoPoseAlert = false;
+              } else if (!_hasShownNoPoseAlert) {
+                // 2초 이상 감지되지 않으면 알림 표시
+                final elapsed = DateTime.now().difference(_noPoseStartTime!);
+                if (elapsed >= _noPoseAlertDuration) {
+                  _hasShownNoPoseAlert = true;
+                  _showNoPoseAlert();
+                }
+              }
             });
           }
         }
@@ -341,6 +376,29 @@ class _ReminderPageState extends State<ReminderPage> {
     _isClosing = true;
     _detectionTimer?.cancel();
     Navigator.pop(context);
+  }
+
+  void _showNoPoseAlert() {
+    if (!mounted || _isClosing) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('자세 인식 안내'),
+          content: const Text('모니터 각도나 화면과의 거리를 조절해보세요'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
