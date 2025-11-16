@@ -5,6 +5,8 @@ class CircularTimerRing extends StatefulWidget {
   final bool isRunning;
   final int intervalSeconds;
   final int remainingSeconds;
+  final bool isDndActive;
+  final String? dndTimeRange;
   final ValueChanged<int> onIntervalChanged;
   final VoidCallback onStartStop;
 
@@ -13,6 +15,8 @@ class CircularTimerRing extends StatefulWidget {
     required this.isRunning,
     required this.intervalSeconds,
     required this.remainingSeconds,
+    required this.isDndActive,
+    this.dndTimeRange,
     required this.onIntervalChanged,
     required this.onStartStop,
   });
@@ -77,7 +81,7 @@ class _CircularTimerRingState extends State<CircularTimerRing> {
   }
 
   void _handleDragUpdate(DragUpdateDetails details, Size size) {
-    if (widget.isRunning) return; // 실행 중에는 드래그 비활성화
+    if (widget.isRunning || widget.isDndActive) return; // 실행 중이거나 DND 활성 시 드래그 비활성화
 
     final angle = _positionToAngle(details.localPosition, size);
     final seconds = _angleToSeconds(angle);
@@ -101,7 +105,7 @@ class _CircularTimerRingState extends State<CircularTimerRing> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      cursor: widget.isRunning ? SystemMouseCursors.basic : SystemMouseCursors.click,
+      cursor: (widget.isRunning || widget.isDndActive) ? SystemMouseCursors.basic : SystemMouseCursors.click,
       child: GestureDetector(
         onPanUpdate: (details) {
           final RenderBox renderBox = context.findRenderObject() as RenderBox;
@@ -113,42 +117,84 @@ class _CircularTimerRingState extends State<CircularTimerRing> {
           isRunning: widget.isRunning,
           intervalSeconds: widget.intervalSeconds,
           remainingSeconds: widget.remainingSeconds,
+          isDndActive: widget.isDndActive,
         ),
         child: SizedBox(
           width: 320,
           height: 320,
           child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // 시간 표시
-                Text(
-                  widget.isRunning
-                      ? _formatCountdown(widget.remainingSeconds)
-                      : _formatTime(widget.intervalSeconds),
-                  style: const TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF5B8C85),  // 세이지 그린
-                    letterSpacing: 2,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // 시작/중지 아이콘 버튼
-                GestureDetector(
-                  onTap: widget.onStartStop,
-                  child: Icon(
-                    widget.isRunning ? Icons.pause_circle_outline : Icons.play_circle_outline,
-                    color: widget.isRunning ? const Color(0xFFBDBDBD) : const Color(0xFF5B8C85),  // 회색/세이지 그린
-                    size: 60,
-                  ),
-                ),
-              ],
-            ),
+            child: widget.isDndActive
+                ? _buildDndDisplay()
+                : _buildNormalDisplay(),
           ),
         ),
       ),
       ),
+    );
+  }
+
+  // DND 활성 시 표시
+  Widget _buildDndDisplay() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(
+          Icons.bedtime,
+          size: 72,
+          color: Color(0xFF5B8C85),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          '방해금지',
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF424242),
+          ),
+        ),
+        if (widget.dndTimeRange != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            widget.dndTimeRange!,
+            style: const TextStyle(
+              fontSize: 18,
+              color: Color(0xFF757575),
+              letterSpacing: 1,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // 일반 상태 표시
+  Widget _buildNormalDisplay() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // 시간 표시
+        Text(
+          widget.isRunning
+              ? _formatCountdown(widget.remainingSeconds)
+              : _formatTime(widget.intervalSeconds),
+          style: const TextStyle(
+            fontSize: 48,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF5B8C85),  // 세이지 그린
+            letterSpacing: 2,
+          ),
+        ),
+        const SizedBox(height: 20),
+        // 시작/중지 아이콘 버튼
+        GestureDetector(
+          onTap: widget.onStartStop,
+          child: Icon(
+            widget.isRunning ? Icons.pause_circle_outline : Icons.play_circle_outline,
+            color: widget.isRunning ? const Color(0xFFBDBDBD) : const Color(0xFF5B8C85),  // 회색/세이지 그린
+            size: 60,
+          ),
+        ),
+      ],
     );
   }
 
@@ -163,11 +209,13 @@ class CircularTimerPainter extends CustomPainter {
   final bool isRunning;
   final int intervalSeconds;
   final int remainingSeconds;
+  final bool isDndActive;
 
   CircularTimerPainter({
     required this.isRunning,
     required this.intervalSeconds,
     required this.remainingSeconds,
+    required this.isDndActive,
   });
 
   @override
@@ -219,9 +267,11 @@ class CircularTimerPainter extends CustomPainter {
       );
     }
 
-    // 2. 진행 링 (세이지 그린)
+    // 2. 진행 링 (DND 활성 시 회색, 아니면 세이지 그린)
     final progressPaint = Paint()
-      ..color = const Color(0xFF5B8C85)  // 세이지 그린
+      ..color = isDndActive 
+          ? const Color(0xFFBDBDBD)  // DND 활성 시 회색
+          : const Color(0xFF5B8C85)  // 세이지 그린
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
@@ -248,8 +298,8 @@ class CircularTimerPainter extends CustomPainter {
       progressPaint,
     );
 
-    // 3. 드래그 핸들 (실행 중이 아닐 때만 표시)
-    if (!isRunning) {
+    // 3. 드래그 핸들 (실행 중이 아니고 DND 비활성일 때만 표시)
+    if (!isRunning && !isDndActive) {
       // 핸들 위치: 현재 간격에 해당하는 각도
       final intervals = [5, 10, 60, 600, 1200, 1800, 2700, 3600];
       final index = intervals.indexOf(intervalSeconds);
@@ -288,7 +338,8 @@ class CircularTimerPainter extends CustomPainter {
   bool shouldRepaint(CircularTimerPainter oldDelegate) {
     return oldDelegate.isRunning != isRunning ||
         oldDelegate.intervalSeconds != intervalSeconds ||
-        oldDelegate.remainingSeconds != remainingSeconds;
+        oldDelegate.remainingSeconds != remainingSeconds ||
+        oldDelegate.isDndActive != isDndActive;
   }
 }
 

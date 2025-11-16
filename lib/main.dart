@@ -78,6 +78,8 @@ class _MyHomePageState extends State<MyHomePage> {
   int _blockedAppsCount = 0; // 집중 앱 개수
   int _remainingSeconds = 0; // 다음 리마인더까지 남은 시간 (초)
   int _selectedIndex = 0; // 현재 선택된 페이지 인덱스 (0: 홈, 1: 설정, 2: DND, 3: 집중 앱)
+  bool _isDndActive = false; // 현재 DND가 활성화되었는지 여부
+  String? _dndTimeRange; // DND 시간대 (예: "14:00 - 15:30")
 
   @override
   void initState() {
@@ -99,6 +101,8 @@ class _MyHomePageState extends State<MyHomePage> {
     var interval = await _poseService.loadReminderInterval();
     final hasDnd = await _poseService.hasDndScheduleToday();
     final blockedApps = await _poseService.loadBlockedApps();
+    final isDndActive = await _poseService.isInDndPeriod();
+    final dndTimeRange = await _poseService.getDndTimeRange();
     
     // 최소값 보장 (5초)
     if (interval < 5) {
@@ -111,26 +115,23 @@ class _MyHomePageState extends State<MyHomePage> {
       _reminderInterval = interval;
       _hasDndSchedule = hasDnd;
       _blockedAppsCount = blockedApps.length;
+      _isDndActive = isDndActive;
+      _dndTimeRange = dndTimeRange;
     });
     
     // 설정 로드 후 아이콘 업데이트
     _updateDockIcon();
   }
 
-  // Dock 아이콘 업데이트 - DND가 최우선, 그 다음 리마인더 상태
+  // Dock 아이콘 업데이트 - 현재 상태를 표시
+  // (DND는 타이머 링에서 표시하므로 dock 아이콘에 영향 없음)
   Future<void> _updateDockIcon() async {
-    // DND 상태 확인 (최우선)
-    final isInDnd = await _poseService.isInDndPeriod();
-    if (isInDnd) {
-      await _poseService.setDockIcon('moon');
-      return;
-    }
-    
-    // 리마인더 실행 상태에 따라 아이콘 변경
     if (_isReminderRunning) {
-      await _poseService.setDockIcon('pause');
-    } else {
+      // 리마인더 실행 중 -> 재생 아이콘 표시
       await _poseService.setDockIcon('play');
+    } else {
+      // 리마인더 중단 중 -> 일시정지 아이콘 표시
+      await _poseService.setDockIcon('pause');
     }
   }
 
@@ -433,6 +434,8 @@ class _MyHomePageState extends State<MyHomePage> {
                     isRunning: _isReminderRunning,
                     intervalSeconds: _reminderInterval,
                     remainingSeconds: _remainingSeconds,
+                    isDndActive: _isDndActive,
+                    dndTimeRange: _dndTimeRange,
                     onIntervalChanged: (int newInterval) async {
                       setState(() {
                         _reminderInterval = newInterval;
