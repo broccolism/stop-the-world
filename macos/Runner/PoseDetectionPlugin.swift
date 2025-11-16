@@ -3,6 +3,101 @@ import FlutterMacOS
 import AVFoundation
 import Vision
 
+// MARK: - Dock Icon Generator
+
+enum DockIconState: String {
+    case play
+    case pause
+    case moon
+}
+
+@available(macOS 11.0, *)
+class DockIconGenerator {
+    
+    /// Generate a dock icon with SF Symbol and macOS-style rounded corners
+    static func generateIcon(symbolName: String, backgroundColor: NSColor, symbolColor: NSColor) -> NSImage? {
+        let size: CGFloat = 512
+        let cornerRadius: CGFloat = size * 0.2237 // Standard macOS icon corner radius ratio
+        
+        let image = NSImage(size: NSSize(width: size, height: size))
+        
+        image.lockFocus()
+        
+        // Draw rounded rectangle background
+        let backgroundPath = NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: size, height: size),
+                                         xRadius: cornerRadius,
+                                         yRadius: cornerRadius)
+        backgroundColor.setFill()
+        backgroundPath.fill()
+        
+        // Draw SF Symbol in the center
+        if let symbolImage = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil) {
+            let symbolSize: CGFloat = size * 0.5
+            let config = NSImage.SymbolConfiguration(pointSize: symbolSize, weight: .regular)
+            let configuredSymbol = symbolImage.withSymbolConfiguration(config)
+            
+            if let tinted = configuredSymbol?.tinted(with: symbolColor) {
+                let symbolRect = NSRect(
+                    x: (size - symbolSize) / 2,
+                    y: (size - symbolSize) / 2,
+                    width: symbolSize,
+                    height: symbolSize
+                )
+                tinted.draw(in: symbolRect)
+            }
+        }
+        
+        image.unlockFocus()
+        
+        return image
+    }
+    
+    /// Get predefined dock icon for specific state
+    static func getIcon(for state: DockIconState) -> NSImage? {
+        switch state {
+        case .play:
+            // Play icon - soft green background
+            return generateIcon(
+                symbolName: "play.circle.fill",
+                backgroundColor: NSColor(red: 0.36, green: 0.55, blue: 0.52, alpha: 1.0), // Sage green
+                symbolColor: .white
+            )
+        case .pause:
+            // Pause icon - soft blue-gray background
+            return generateIcon(
+                symbolName: "pause.circle.fill",
+                backgroundColor: NSColor(red: 0.46, green: 0.55, blue: 0.58, alpha: 1.0), // Blue-gray
+                symbolColor: .white
+            )
+        case .moon:
+            // Moon icon - dark blue background
+            return generateIcon(
+                symbolName: "moon.fill",
+                backgroundColor: NSColor(red: 0.20, green: 0.29, blue: 0.45, alpha: 1.0), // Dark blue
+                symbolColor: NSColor(red: 1.0, green: 0.95, blue: 0.7, alpha: 1.0) // Soft yellow
+            )
+        }
+    }
+}
+
+extension NSImage {
+    func tinted(with color: NSColor) -> NSImage? {
+        let image = self.copy() as! NSImage
+        image.lockFocus()
+        
+        color.set()
+        
+        let imageRect = NSRect(origin: .zero, size: image.size)
+        imageRect.fill(using: .sourceAtop)
+        
+        image.unlockFocus()
+        
+        return image
+    }
+}
+
+// MARK: - Pose Detection Plugin
+
 @available(macOS 11.0, *)
 public class PoseDetectionPlugin: NSObject, FlutterPlugin {
     private var cameraManager: CameraManager?
@@ -64,6 +159,15 @@ public class PoseDetectionPlugin: NSObject, FlutterPlugin {
             resetBlinkCount(result: result)
         case "getBlinkCount":
             getBlinkCount(result: result)
+        case "setDockIcon":
+            if let args = call.arguments as? [String: Any],
+               let iconType = args["iconType"] as? String {
+                setDockIcon(iconType: iconType, result: result)
+            } else {
+                result(FlutterError(code: "INVALID_ARGUMENT",
+                                  message: "Icon type required",
+                                  details: nil))
+            }
         default:
             result(FlutterMethodNotImplemented)
         }
@@ -307,6 +411,28 @@ public class PoseDetectionPlugin: NSObject, FlutterPlugin {
         
         let count = blinkDetector.getBlinkCount()
         result(count)
+    }
+    
+    // MARK: - Dock Icon Management
+    
+    private func setDockIcon(iconType: String, result: @escaping FlutterResult) {
+        DispatchQueue.main.async {
+            guard let state = DockIconState(rawValue: iconType) else {
+                result(FlutterError(code: "INVALID_ICON_TYPE",
+                                  message: "Invalid icon type: \(iconType). Must be 'play', 'pause', or 'moon'",
+                                  details: nil))
+                return
+            }
+            
+            if let icon = DockIconGenerator.getIcon(for: state) {
+                NSApp.applicationIconImage = icon
+                result(nil)
+            } else {
+                result(FlutterError(code: "ICON_GENERATION_FAILED",
+                                  message: "Failed to generate dock icon",
+                                  details: nil))
+            }
+        }
     }
 }
 

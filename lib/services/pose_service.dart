@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/pose_data.dart';
@@ -251,6 +252,21 @@ class PoseService {
   Future<List<String>> loadBlockedApps() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getStringList('blocked_apps') ?? ['zoom.us']; // 기본값: Zoom
+  }
+
+  // MARK: - Dock Icon Management
+
+  /// Set dock icon based on app state
+  /// iconType: "play", "pause", or "moon"
+  Future<void> setDockIcon(String iconType) async {
+    try {
+      await platform.invokeMethod('setDockIcon', {
+        'iconType': iconType,
+      });
+    } on PlatformException catch (e) {
+      // Log error but don't throw - dock icon is not critical
+      debugPrint('Failed to set dock icon: ${e.message}');
+    }
   }
 
 }

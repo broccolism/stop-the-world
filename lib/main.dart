@@ -83,6 +83,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void initState() {
     super.initState();
     _loadSettings();
+    _updateDockIcon(); // 초기 아이콘 설정
     // 자동 시작 제거 - 사용자가 수동으로 시작해야 함
   }
 
@@ -111,6 +112,26 @@ class _MyHomePageState extends State<MyHomePage> {
       _hasDndSchedule = hasDnd;
       _blockedAppsCount = blockedApps.length;
     });
+    
+    // 설정 로드 후 아이콘 업데이트
+    _updateDockIcon();
+  }
+
+  // Dock 아이콘 업데이트 - DND가 최우선, 그 다음 리마인더 상태
+  Future<void> _updateDockIcon() async {
+    // DND 상태 확인 (최우선)
+    final isInDnd = await _poseService.isInDndPeriod();
+    if (isInDnd) {
+      await _poseService.setDockIcon('moon');
+      return;
+    }
+    
+    // 리마인더 실행 상태에 따라 아이콘 변경
+    if (_isReminderRunning) {
+      await _poseService.setDockIcon('pause');
+    } else {
+      await _poseService.setDockIcon('play');
+    }
   }
 
   // 시간 포맷팅 (초 -> MM:SS)
@@ -176,11 +197,12 @@ class _MyHomePageState extends State<MyHomePage> {
       _isReminderRunning = true;
     });
     
-    // 카운트다운 시작
-    _startCountdown();
+    // Dock 아이콘 업데이트 (일시중단 아이콘)
+    await _updateDockIcon();
     
     debugPrint('[Reminder] Starting reminder loop');
     _startReminderLoop();
+    // 카운트다운은 _scheduleNextReminder()에서 시작됨
   }
   
   // 리마인더 일시중단
@@ -194,6 +216,9 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       _isReminderRunning = false;
     });
+    
+    // Dock 아이콘 업데이트 (재생 아이콘)
+    _updateDockIcon();
     
     debugPrint('[Reminder] Paused reminder loop');
   }
@@ -249,6 +274,9 @@ class _MyHomePageState extends State<MyHomePage> {
       return;
     }
 
+    // 카운트다운 시작 (리마인더 표시 전에)
+    _startCountdown();
+    
     debugPrint('[Reminder] Scheduling next reminder in $_reminderInterval seconds...');
     _reminderTimer = Timer(Duration(seconds: _reminderInterval), () async {
       if (!_isReminderRunning || _isReminderShowing) {
@@ -271,6 +299,9 @@ class _MyHomePageState extends State<MyHomePage> {
         return;
       }
       
+      // 리마인더 표시하는 동안 카운트다운 일시중지
+      _countdownTimer?.cancel();
+      
       debugPrint('[Reminder] Showing reminder...');
       await _showReminder();
       
@@ -290,17 +321,24 @@ class _MyHomePageState extends State<MyHomePage> {
     if (index == 0) {
       _loadSettings();
     }
+    
+    // DND 페이지에서 돌아올 때 아이콘 업데이트 (DND 설정이 변경되었을 수 있음)
+    if (index == 0) {
+      _updateDockIcon();
+    }
   }
 
   // 리마인더 페이지 표시
   Future<void> _showReminder() async {
     if (!mounted) return;
     
-    // 기준 자세가 있는지 먼저 확인
-    final hasReferencePose = await _hasReferencePose();
-    if (!hasReferencePose) {
-      debugPrint('[Reminder] No reference pose, skipping reminder');
-      return;
+    // 자세 매칭 모드일 때만 기준 자세 확인
+    if (_reminderType == ReminderType.poseMatching) {
+      final hasReferencePose = await _hasReferencePose();
+      if (!hasReferencePose) {
+        debugPrint('[Reminder] No reference pose, skipping reminder');
+        return;
+      }
     }
     
     _isReminderShowing = true;
