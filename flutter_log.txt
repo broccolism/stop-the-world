@@ -1,0 +1,6 @@
+Launching lib/main.dart on macOS in debug mode...
+Building macOS application...                                   
+error: unable to attach DB: error: accessing build database "/Users/user/Documents/git-broccolism/stop-the-world/build/macos/Build/Intermediates.noindex/XCBuildData/build.db": database is locked Possibly there are two concurrent builds running in the same filesystem location.
+** BUILD FAILED **
+
+Error: Build process failed

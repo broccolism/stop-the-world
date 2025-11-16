@@ -8,7 +8,6 @@ import 'pages/reminder_page.dart';
 import 'pages/dnd_page.dart';
 import 'pages/blacklist_page.dart';
 import 'services/pose_service.dart';
-import 'services/app_icon_service.dart';
 import 'models/reminder_type.dart';
 import 'widgets/circular_timer_ring.dart';
 
@@ -74,19 +73,21 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _isReminderRunning = false; // 리마인더 실행 중 여부
   final PoseService _poseService = PoseService();
   ReminderType _reminderType = ReminderType.poseMatching; // 현재 선택된 리마인더 타입
-  int _reminderInterval = 60; // 리마인더 간격 (초, 기본값 1분)
+  int _reminderInterval = 5; // 리마인더 간격 (초, 기본값 5분)
   bool _hasDndSchedule = false; // DND 스케줄 설정 여부
   int _blockedAppsCount = 0; // 집중 앱 개수
   int _remainingSeconds = 0; // 다음 리마인더까지 남은 시간 (초)
   int _selectedIndex = 0; // 현재 선택된 페이지 인덱스 (0: 홈, 1: 설정, 2: DND, 3: 집중 앱)
+  bool _isDndActive = false; // 현재 DND가 활성화되었는지 여부
+  String? _dndTimeRange; // DND 시간대 (예: "14:00 - 15:30")
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    _updateDockIcon(); // 초기 아이콘 설정
+    // 카메라 권한은 실제 사용 시 자동으로 요청됨
     // 자동 시작 제거 - 사용자가 수동으로 시작해야 함
-    // 초기 아이콘을 play로 설정
-    AppIconService.updateToPlay();
   }
 
   @override
@@ -101,18 +102,13 @@ class _MyHomePageState extends State<MyHomePage> {
     var interval = await _poseService.loadReminderInterval();
     final hasDnd = await _poseService.hasDndScheduleToday();
     final blockedApps = await _poseService.loadBlockedApps();
+    final isDndActive = await _poseService.isInDndPeriod();
+    final dndTimeRange = await _poseService.getDndTimeRange();
     
-    // 유효한 간격 목록
-    const validIntervals = [5, 10, 60, 600, 1200, 1800, 2700, 3600];
-    
-    // 유효하지 않은 간격이면 가장 가까운 유효한 값으로 변경
-    if (!validIntervals.contains(interval)) {
-      // 가장 가까운 값 찾기
-      interval = validIntervals.reduce((a, b) => 
-        (interval - a).abs() < (interval - b).abs() ? a : b
-      );
+    // 최소값 보장 (5초)
+    if (interval < 5) {
+      interval = 5;
       await _poseService.saveReminderInterval(interval);
-      debugPrint('[Settings] Invalid interval detected, changed to: $interval');
     }
     
     setState(() {
@@ -120,7 +116,24 @@ class _MyHomePageState extends State<MyHomePage> {
       _reminderInterval = interval;
       _hasDndSchedule = hasDnd;
       _blockedAppsCount = blockedApps.length;
+      _isDndActive = isDndActive;
+      _dndTimeRange = dndTimeRange;
     });
+    
+    // 설정 로드 후 아이콘 업데이트
+    _updateDockIcon();
+  }
+
+  // Dock 아이콘 업데이트 - 현재 상태를 표시
+  // (DND는 타이머 링에서 표시하므로 dock 아이콘에 영향 없음)
+  Future<void> _updateDockIcon() async {
+    if (_isReminderRunning) {
+      // 리마인더 실행 중 -> 일시정지 아이콘 표시
+      await _poseService.setDockIcon('pause');
+    } else {
+      // 리마인더 중단 중 -> 재생 아이콘 표시
+      await _poseService.setDockIcon('play');
+    }
   }
 
   // 시간 포맷팅 (초 -> MM:SS)
@@ -186,14 +199,12 @@ class _MyHomePageState extends State<MyHomePage> {
       _isReminderRunning = true;
     });
     
-    // 아이콘을 pause로 변경 (리마인더 실행 중)
-    AppIconService.updateToPause();
-    
-    // 카운트다운 시작
-    _startCountdown();
+    // Dock 아이콘 업데이트 (일시중단 아이콘)
+    await _updateDockIcon();
     
     debugPrint('[Reminder] Starting reminder loop');
     _startReminderLoop();
+    // 카운트다운은 _scheduleNextReminder()에서 시작됨
   }
   
   // 리마인더 일시중단
@@ -208,8 +219,8 @@ class _MyHomePageState extends State<MyHomePage> {
       _isReminderRunning = false;
     });
     
-    // 아이콘을 play로 변경 (리마인더 중지 상태)
-    AppIconService.updateToPlay();
+    // Dock 아이콘 업데이트 (재생 아이콘)
+    _updateDockIcon();
     
     debugPrint('[Reminder] Paused reminder loop');
   }
@@ -230,23 +241,29 @@ class _MyHomePageState extends State<MyHomePage> {
       final blockedApps = await _poseService.loadBlockedApps();
       if (blockedApps.isEmpty) return false;
 
-      // ps 명령어로 실행 중인 프로세스 확인
-      final result = await Process.run('ps', ['-ax', '-o', 'comm']);
-      if (result.exitCode != 0) {
-        debugPrint('[Blacklist] Failed to get process list: ${result.stderr}');
-        return false;
-      }
-
-      final processes = result.stdout.toString().toLowerCase();
-      
-      for (final appName in blockedApps) {
-        if (processes.contains(appName.toLowerCase())) {
-          debugPrint('[Blacklist] Blocked app is running: $appName');
-          return true;
-        }
-      }
-      
+      // macOS 샌드박스 환경에서는 Process.run이 forbidden-exec-sugid 에러를 발생시킵니다
+      // 따라서 블랙리스트 체크를 비활성화합니다
+      // TODO: NSWorkspace API를 사용하도록 변경 필요
+      debugPrint('[Blacklist] Skipping blocked app check (sandbox limitation)');
       return false;
+      
+      // ps 명령어로 실행 중인 프로세스 확인 (샌드박스에서 작동 안 함)
+      // final result = await Process.run('ps', ['-ax', '-o', 'comm']);
+      // if (result.exitCode != 0) {
+      //   debugPrint('[Blacklist] Failed to get process list: ${result.stderr}');
+      //   return false;
+      // }
+      //
+      // final processes = result.stdout.toString().toLowerCase();
+      // 
+      // for (final appName in blockedApps) {
+      //   if (processes.contains(appName.toLowerCase())) {
+      //     debugPrint('[Blacklist] Blocked app is running: $appName');
+      //     return true;
+      //   }
+      // }
+      // 
+      // return false;
     } catch (e) {
       debugPrint('[Blacklist] Error checking blocked apps: $e');
       return false;
@@ -264,12 +281,20 @@ class _MyHomePageState extends State<MyHomePage> {
       debugPrint('[Reminder] Loop stopped, not scheduling next reminder');
       return;
     }
-
+    
     debugPrint('[Reminder] Scheduling next reminder in $_reminderInterval seconds...');
+    
+    // 카운트다운 시작 (타이머와 함께)
+    _startCountdown();
+    
     _reminderTimer = Timer(Duration(seconds: _reminderInterval), () async {
       if (!_isReminderRunning || _isReminderShowing) {
         debugPrint('[Reminder] Skipping reminder (running: $_isReminderRunning, showing: $_isReminderShowing)');
-        _scheduleNextReminder(); // 다시 예약
+        // 리마인더가 이미 표시 중이면 1초 후 재시도 (카운트다운은 시작하지 않음)
+        await Future.delayed(const Duration(seconds: 1));
+        if (_isReminderRunning && !_isReminderShowing) {
+          _scheduleNextReminder();
+        }
         return;
       }
       
@@ -287,10 +312,13 @@ class _MyHomePageState extends State<MyHomePage> {
         return;
       }
       
+      // 리마인더 표시하는 동안 카운트다운 중지
+      _stopCountdown();
+      
       debugPrint('[Reminder] Showing reminder...');
       await _showReminder();
       
-      // 리마인더가 닫힌 후 다음 리마인더 예약
+      // 리마인더가 닫힌 후 다음 리마인더 예약 (이때 카운트다운 다시 시작)
       debugPrint('[Reminder] Reminder closed, scheduling next one');
       _scheduleNextReminder();
     });
@@ -306,17 +334,27 @@ class _MyHomePageState extends State<MyHomePage> {
     if (index == 0) {
       _loadSettings();
     }
+    
+    // DND 페이지에서 돌아올 때 아이콘 업데이트 (DND 설정이 변경되었을 수 있음)
+    if (index == 0) {
+      _updateDockIcon();
+    }
   }
 
   // 리마인더 페이지 표시
   Future<void> _showReminder() async {
-    if (!mounted) return;
-    
-    // 기준 자세가 있는지 먼저 확인
-    final hasReferencePose = await _hasReferencePose();
-    if (!hasReferencePose) {
-      debugPrint('[Reminder] No reference pose, skipping reminder');
+    if (!mounted) {
+      debugPrint('[Reminder] Widget not mounted, aborting');
       return;
+    }
+    
+    // 자세 매칭 모드일 때만 기준 자세 확인
+    if (_reminderType == ReminderType.poseMatching) {
+      final hasReferencePose = await _hasReferencePose();
+      if (!hasReferencePose) {
+        debugPrint('[Reminder] No reference pose, skipping reminder');
+        return;
+      }
     }
     
     _isReminderShowing = true;
@@ -326,45 +364,71 @@ class _MyHomePageState extends State<MyHomePage> {
       
       // 최소화되어 있으면 복원
       try {
+        debugPrint('[Reminder] Restoring window...');
         await windowManager.restore();
-        await Future.delayed(const Duration(milliseconds: 50));
-      } catch (e) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        debugPrint('[Reminder] Window restored');
+      } catch (e, st) {
         debugPrint('[Reminder] Window restore error: $e');
+        debugPrint('[Reminder] Stack: $st');
       }
       
       // 최상단으로 올리고 포커스 주기
       try {
+        debugPrint('[Reminder] Setting window always on top...');
         await windowManager.setAlwaysOnTop(true);
+        await Future.delayed(const Duration(milliseconds: 50));
+        
+        debugPrint('[Reminder] Showing window...');
         await windowManager.show();
+        await Future.delayed(const Duration(milliseconds: 50));
+        
+        debugPrint('[Reminder] Focusing window...');
         await windowManager.focus();
-      } catch (e) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        debugPrint('[Reminder] Window focused');
+      } catch (e, st) {
         debugPrint('[Reminder] Window focus error: $e');
+        debugPrint('[Reminder] Stack: $st');
       }
       
       debugPrint('[Reminder] About to show reminder page...');
       
       // 리마인더 페이지로 이동
-      if (mounted) {
+      if (!mounted) {
+        debugPrint('[Reminder] Widget unmounted before navigation');
+        return;
+      }
+      
+      try {
         debugPrint('[Reminder] Calling Navigator.pushNamed...');
         await Navigator.pushNamed(context, '/reminder');
         debugPrint('[Reminder] Navigator.pushNamed completed');
-      } else {
-        debugPrint('[Reminder] Widget not mounted, skipping');
+      } catch (e, st) {
+        debugPrint('[Reminder] Navigation error: $e');
+        debugPrint('[Reminder] Stack: $st');
+        return;
       }
       
       debugPrint('[Reminder] Reminder page closed');
       
       // 최상단 해제 후 최소화
       try {
+        debugPrint('[Reminder] Removing always on top...');
         await windowManager.setAlwaysOnTop(false);
+        await Future.delayed(const Duration(milliseconds: 50));
+        
+        debugPrint('[Reminder] Minimizing window...');
         await windowManager.minimize();
-      } catch (e) {
+        debugPrint('[Reminder] Window minimized');
+      } catch (e, st) {
         debugPrint('[Reminder] Window minimize error: $e');
+        debugPrint('[Reminder] Stack: $st');
       }
       
-      debugPrint('[Reminder] Window minimized');
+      debugPrint('[Reminder] Window operations completed');
     } catch (e, stackTrace) {
-      debugPrint('[Reminder] Error: $e');
+      debugPrint('[Reminder] Unexpected error: $e');
       debugPrint('[Reminder] Stack trace: $stackTrace');
     } finally {
       _isReminderShowing = false;
@@ -411,6 +475,8 @@ class _MyHomePageState extends State<MyHomePage> {
                     isRunning: _isReminderRunning,
                     intervalSeconds: _reminderInterval,
                     remainingSeconds: _remainingSeconds,
+                    isDndActive: _isDndActive,
+                    dndTimeRange: _dndTimeRange,
                     onIntervalChanged: (int newInterval) async {
                       setState(() {
                         _reminderInterval = newInterval;

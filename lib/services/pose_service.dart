@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/pose_data.dart';
@@ -241,6 +242,35 @@ class PoseService {
     return true;
   }
 
+  /// 현재 DND 시간대를 문자열로 반환
+  /// 반환 형식: "HH:mm - HH:mm" (예: "14:00 - 15:30")
+  /// DND가 활성화되지 않았거나 시간대가 없으면 null 반환
+  Future<String?> getDndTimeRange() async {
+    final schedule = await loadDndSchedule();
+    if (schedule == null || !schedule.isToday() || schedule.timeRanges.isEmpty) {
+      return null;
+    }
+    
+    final now = DateTime.now();
+    final currentMinutes = now.hour * 60 + now.minute;
+    
+    // 현재 진행 중인 시간대 찾기
+    for (final range in schedule.timeRanges) {
+      if (currentMinutes >= range.startMinutes && currentMinutes < range.endMinutes) {
+        return '${range.startHour.toString().padLeft(2, '0')}:${range.startMinute.toString().padLeft(2, '0')} - ${range.endHour.toString().padLeft(2, '0')}:${range.endMinute.toString().padLeft(2, '0')}';
+      }
+    }
+    
+    // 현재 진행 중인 시간대가 없으면, 가장 가까운 다음 시간대 찾기
+    for (final range in schedule.timeRanges) {
+      if (currentMinutes < range.startMinutes) {
+        return '${range.startHour.toString().padLeft(2, '0')}:${range.startMinute.toString().padLeft(2, '0')} - ${range.endHour.toString().padLeft(2, '0')}:${range.endMinute.toString().padLeft(2, '0')}';
+      }
+    }
+    
+    return null;
+  }
+
   // MARK: - Blocked Apps Management
 
   Future<void> saveBlockedApps(List<String> apps) async {
@@ -251,6 +281,21 @@ class PoseService {
   Future<List<String>> loadBlockedApps() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getStringList('blocked_apps') ?? ['zoom.us']; // 기본값: Zoom
+  }
+
+  // MARK: - Dock Icon Management
+
+  /// Set dock icon based on app state
+  /// iconType: "play", "pause", or "moon"
+  Future<void> setDockIcon(String iconType) async {
+    try {
+      await platform.invokeMethod('setDockIcon', {
+        'iconType': iconType,
+      });
+    } on PlatformException catch (e) {
+      // Log error but don't throw - dock icon is not critical
+      debugPrint('Failed to set dock icon: ${e.message}');
+    }
   }
 
 }

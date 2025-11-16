@@ -24,7 +24,7 @@ class _ReminderPageState extends State<ReminderPage> {
   String? _snapshotPath;
   double _cameraOpacity = 0.6;
   DateTime? _goodPoseStartTime;
-  static const Duration _requiredHoldDuration = Duration(seconds: 3);
+  static const Duration _requiredHoldDuration = Duration(seconds: 5);
   
   // 깜빡임 감지용 변수
   int _currentBlinkCount = 0;
@@ -67,9 +67,11 @@ class _ReminderPageState extends State<ReminderPage> {
       debugPrint('[Reminder] Has reference: $_hasReference');
       
       if (!_hasReference) {
-        setState(() {
-          _statusMessage = '기준 자세가 설정되지 않았습니다\n2초 후 자동으로 닫힙니다';
-        });
+        if (mounted) {
+          setState(() {
+            _statusMessage = '기준 자세가 설정되지 않았습니다\n2초 후 자동으로 닫힙니다';
+          });
+        }
         
         await Future.delayed(const Duration(seconds: 2));
         
@@ -83,27 +85,66 @@ class _ReminderPageState extends State<ReminderPage> {
       _referencePose = await _poseService.loadReferencePose();
       debugPrint('[Reminder] Reference pose loaded with ${_referencePose?.joints.length ?? 0} joints');
       
+      // 기준 자세 데이터 검증
+      if (_referencePose == null || _referencePose!.joints.isEmpty) {
+        debugPrint('[Reminder] ERROR: Invalid reference pose data');
+        if (mounted) {
+          setState(() {
+            _statusMessage = '기준 자세 데이터가 손상되었습니다\n설정에서 다시 기록해주세요';
+          });
+        }
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) {
+          Navigator.pop(context);
+        }
+        return;
+      }
+      
       // 스냅샷 경로 로드
       _snapshotPath = await _poseService.loadSnapshotPath();
       debugPrint('[Reminder] Snapshot path: $_snapshotPath');
       
-      // 카메라 시작
-      final textureId = await _poseService.startCamera();
-      debugPrint('[Reminder] Camera started with textureId: $textureId');
+      // 카메라 시작 (에러 핸들링 강화)
+      int? textureId;
+      try {
+        textureId = await _poseService.startCamera();
+        debugPrint('[Reminder] Camera started with textureId: $textureId');
+      } catch (cameraError) {
+        debugPrint('[Reminder] Camera start failed: $cameraError');
+        if (mounted) {
+          setState(() {
+            _statusMessage = '카메라 시작 실패\n카메라 권한을 확인해주세요';
+          });
+        }
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) {
+          Navigator.pop(context);
+        }
+        return;
+      }
       
-      setState(() {
-        _textureId = textureId;
-        _isInitialized = true;
-        _statusMessage = '기준 자세와 맞춰주세요';
-      });
+      if (mounted) {
+        setState(() {
+          _textureId = textureId;
+          _isInitialized = true;
+          _statusMessage = '기준 자세와 맞춰주세요';
+        });
+      }
       
       _startPoseDetectionLoop();
       debugPrint('[Reminder] Pose matching initialized successfully');
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('[Reminder] Error initializing pose matching: $e');
-      setState(() {
-        _statusMessage = '초기화 실패: $e';
-      });
+      debugPrint('[Reminder] Stack trace: $stackTrace');
+      if (mounted) {
+        setState(() {
+          _statusMessage = '초기화 실패: $e\n2초 후 닫힙니다';
+        });
+      }
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) {
+        Navigator.pop(context);
+      }
     }
   }
   
@@ -115,27 +156,56 @@ class _ReminderPageState extends State<ReminderPage> {
       _targetBlinkCount = await _poseService.loadBlinkTargetCount();
       debugPrint('[Reminder] Target blink count: $_targetBlinkCount');
       
-      // 카메라 시작
-      final textureId = await _poseService.startCamera();
-      debugPrint('[Reminder] Camera started with textureId: $textureId');
+      // 카메라 시작 (에러 핸들링 강화)
+      int? textureId;
+      try {
+        textureId = await _poseService.startCamera();
+        debugPrint('[Reminder] Camera started with textureId: $textureId');
+      } catch (cameraError) {
+        debugPrint('[Reminder] Camera start failed: $cameraError');
+        if (mounted) {
+          setState(() {
+            _statusMessage = '카메라 시작 실패\n카메라 권한을 확인해주세요';
+          });
+        }
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) {
+          Navigator.pop(context);
+        }
+        return;
+      }
       
       // 깜빡임 카운터 리셋
-      await _poseService.resetBlinkCount();
+      try {
+        await _poseService.resetBlinkCount();
+      } catch (e) {
+        debugPrint('[Reminder] Failed to reset blink count: $e');
+        // 리셋 실패해도 계속 진행
+      }
       
-      setState(() {
-        _textureId = textureId;
-        _isInitialized = true;
-        _currentBlinkCount = 0;
-        _statusMessage = '눈을 깜빡이세요!';
-      });
+      if (mounted) {
+        setState(() {
+          _textureId = textureId;
+          _isInitialized = true;
+          _currentBlinkCount = 0;
+          _statusMessage = '눈을 깜빡이세요!';
+        });
+      }
       
       _startBlinkDetectionLoop();
       debugPrint('[Reminder] Blink count initialized successfully');
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('[Reminder] Error initializing blink count: $e');
-      setState(() {
-        _statusMessage = '초기화 실패: $e';
-      });
+      debugPrint('[Reminder] Stack trace: $stackTrace');
+      if (mounted) {
+        setState(() {
+          _statusMessage = '초기화 실패: $e\n2초 후 닫힙니다';
+        });
+      }
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) {
+        Navigator.pop(context);
+      }
     }
   }
 
@@ -169,37 +239,40 @@ class _ReminderPageState extends State<ReminderPage> {
               if (pose.joints.isEmpty) {
                 _statusMessage = '자세가 감지되지 않았습니다';
                 _goodPoseStartTime = null; // 타이머 리셋
-              } else if (similarity >= 0.50) {
+              } else if (similarity >= 0.70) {
                 // 좋은 자세 달성!
                 if (_goodPoseStartTime == null) {
                   // 처음 달성한 경우 타이머 시작
                   _goodPoseStartTime = DateTime.now();
-                  _statusMessage = '좋아요! 3초간 유지하세요... (${(similarity * 100).toStringAsFixed(1)}%)';
-                  debugPrint('[Reminder] Good pose started, timer begins');
+                  _statusMessage = '좋아요! 5초간 유지하세요... (${(similarity * 100).toStringAsFixed(1)}%)';
+                  debugPrint('[Reminder] Good pose started at ${DateTime.now()}, timer begins');
                 } else {
                   // 이미 타이머가 시작된 경우 경과 시간 확인
                   final elapsed = DateTime.now().difference(_goodPoseStartTime!);
+                  final elapsedSeconds = elapsed.inMilliseconds / 1000.0;
                   final remaining = _requiredHoldDuration - elapsed;
                   
+                  debugPrint('[Reminder] Elapsed: ${elapsedSeconds.toStringAsFixed(1)}s / 5.0s, Similarity: ${(similarity * 100).toStringAsFixed(1)}%');
+                  
                   if (remaining.inMilliseconds <= 0) {
-                    // 3초 달성!
+                    // 5초 달성!
                     _statusMessage = '완벽합니다! (${(similarity * 100).toStringAsFixed(1)}%)';
-                    debugPrint('[Reminder] Held for 3 seconds, closing');
+                    debugPrint('[Reminder] ✓ Held for ${elapsedSeconds.toStringAsFixed(1)} seconds, closing now');
                     _closeWithDelay();
                   } else {
-                    // 아직 3초 미만
+                    // 아직 5초 미만
                     final remainingSeconds = (remaining.inMilliseconds / 1000).ceil();
                     _statusMessage = '좋아요! $remainingSeconds초 더 유지... (${(similarity * 100).toStringAsFixed(1)}%)';
                   }
                 }
               } else {
-                // 유사도가 50% 미만으로 떨어짐 - 타이머 리셋
+                // 유사도가 70% 미만으로 떨어짐 - 타이머 리셋
                 if (_goodPoseStartTime != null) {
                   debugPrint('[Reminder] Pose lost, timer reset');
                   _goodPoseStartTime = null;
                 }
                 
-                if (similarity >= 0.35) {
+                if (similarity >= 0.55) {
                   _statusMessage = '조금만 더! (${(similarity * 100).toStringAsFixed(1)}%)';
                 } else {
                   _statusMessage = '자세를 맞춰주세요 (${(similarity * 100).toStringAsFixed(1)}%)';
@@ -273,7 +346,11 @@ class _ReminderPageState extends State<ReminderPage> {
   @override
   void dispose() {
     _detectionTimer?.cancel();
-    _poseService.stopCamera();
+    try {
+      _poseService.stopCamera();
+    } catch (e) {
+      debugPrint('[Reminder] Error stopping camera: $e');
+    }
     super.dispose();
   }
 
@@ -590,9 +667,9 @@ class _ReminderPageState extends State<ReminderPage> {
 
   Color _getSimilarityColor() {
     if (_similarity == null) return const Color(0xFF9E9E9E);  // 회색
-    if (_similarity! >= 0.50) return const Color(0xFF5B8C85);  // 세이지 그린
-    if (_similarity! >= 0.35) return const Color(0xFF8BACA6);  // 옅은 세이지
-    return const Color(0xFF9E9E9E);  // 회색
+    if (_similarity! >= 0.70) return const Color(0xFF5B8C85);  // 녹색 (세이지 그린)
+    if (_similarity! >= 0.55) return const Color(0xFFFFB84D);  // 노란색 (경고)
+    return const Color(0xFFE57373);  // 빨간색 (불일치)
   }
 }
 
