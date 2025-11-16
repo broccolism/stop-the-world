@@ -241,29 +241,29 @@ class _MyHomePageState extends State<MyHomePage> {
       final blockedApps = await _poseService.loadBlockedApps();
       if (blockedApps.isEmpty) return false;
 
-      // macOS 샌드박스 환경에서는 Process.run이 forbidden-exec-sugid 에러를 발생시킵니다
-      // 따라서 블랙리스트 체크를 비활성화합니다
-      // TODO: NSWorkspace API를 사용하도록 변경 필요
-      debugPrint('[Blacklist] Skipping blocked app check (sandbox limitation)');
-      return false;
+      // NSWorkspace API를 사용하여 실행 중인 앱 목록 가져오기
+      final runningApps = await _poseService.getRunningApps();
+      debugPrint('[Blacklist] Checking ${blockedApps.length} blocked apps against ${runningApps.length} running apps');
+      debugPrint('[Blacklist] Blocked apps: $blockedApps');
+      debugPrint('[Blacklist] Running apps: $runningApps');
       
-      // ps 명령어로 실행 중인 프로세스 확인 (샌드박스에서 작동 안 함)
-      // final result = await Process.run('ps', ['-ax', '-o', 'comm']);
-      // if (result.exitCode != 0) {
-      //   debugPrint('[Blacklist] Failed to get process list: ${result.stderr}');
-      //   return false;
-      // }
-      //
-      // final processes = result.stdout.toString().toLowerCase();
-      // 
-      // for (final appName in blockedApps) {
-      //   if (processes.contains(appName.toLowerCase())) {
-      //     debugPrint('[Blacklist] Blocked app is running: $appName');
-      //     return true;
-      //   }
-      // }
-      // 
-      // return false;
+      // 블랙리스트 앱과 실행 중인 앱 비교
+      for (final blockedApp in blockedApps) {
+        final blockedLower = blockedApp.toLowerCase();
+        
+        for (final runningApp in runningApps) {
+          final runningLower = runningApp.toLowerCase();
+          
+          // 부분 일치 검사 (예: "zoom" -> "Zoom" 또는 "zoom.us" -> "Zoom")
+          if (runningLower.contains(blockedLower) || blockedLower.contains(runningLower)) {
+            debugPrint('[Blacklist] Blocked app is running: $blockedApp (matched: $runningApp)');
+            return true;
+          }
+        }
+      }
+      
+      debugPrint('[Blacklist] No blocked apps detected');
+      return false;
     } catch (e) {
       debugPrint('[Blacklist] Error checking blocked apps: $e');
       return false;

@@ -4,6 +4,7 @@ import FlutterMacOS
 @main
 class AppDelegate: FlutterAppDelegate {
   private var iconChannel: FlutterMethodChannel?
+  private var blockedAppsChannel: FlutterMethodChannel?
   
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     return true
@@ -25,6 +26,9 @@ class AppDelegate: FlutterAppDelegate {
     
     // App Icon Manager Method Channel 설정
     setupAppIconChannel(controller: controller)
+    
+    // Blocked Apps Manager Method Channel 설정
+    setupBlockedAppsChannel(controller: controller)
   }
   
   private func setupAppIconChannel(controller: FlutterViewController) {
@@ -92,5 +96,26 @@ class AppDelegate: FlutterAppDelegate {
     
     print("[AppIcon] Could not find icon file: \(iconFileName).png")
     return nil
+  }
+  
+  // Blocked Apps Manager Method Channel 설정
+  private func setupBlockedAppsChannel(controller: FlutterViewController) {
+    blockedAppsChannel = FlutterMethodChannel(
+      name: "blocked_apps_manager",
+      binaryMessenger: controller.engine.binaryMessenger
+    )
+    
+    blockedAppsChannel?.setMethodCallHandler { (call, result) in
+      if call.method == "getRunningApps" {
+        let runningApps = NSWorkspace.shared.runningApplications
+          .compactMap { $0.localizedName }
+          .filter { !$0.isEmpty }
+        
+        print("[BlockedApps] Found \(runningApps.count) running apps")
+        result(runningApps)
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 }

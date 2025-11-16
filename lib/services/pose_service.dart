@@ -8,6 +8,7 @@ import '../models/dnd_schedule.dart';
 
 class PoseService {
   static const platform = MethodChannel('pose_detection');
+  static const blockedAppsChannel = MethodChannel('blocked_apps_manager');
 
   // 재귀적으로 Map<Object?, Object?>를 Map<String, dynamic>으로 변환
   Map<String, dynamic> _convertMap(dynamic input) {
@@ -281,6 +282,22 @@ class PoseService {
   Future<List<String>> loadBlockedApps() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getStringList('blocked_apps') ?? ['zoom.us']; // 기본값: Zoom
+  }
+
+  /// Get list of running application names using NSWorkspace API (macOS)
+  /// Returns empty list if the platform call fails or on non-macOS platforms
+  Future<List<String>> getRunningApps() async {
+    try {
+      final result = await blockedAppsChannel.invokeMethod('getRunningApps');
+      if (result == null) return [];
+      return List<String>.from(result);
+    } on PlatformException catch (e) {
+      debugPrint('[BlockedApps] Failed to get running apps: ${e.message}');
+      return [];
+    } catch (e) {
+      debugPrint('[BlockedApps] Error getting running apps: $e');
+      return [];
+    }
   }
 
   // MARK: - Dock Icon Management
